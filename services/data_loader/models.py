@@ -1,20 +1,22 @@
+# services/data_loader/models.py
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
-# זהו "כינוי סוג" (Type Alias) שמבהיר שבקוד שלנו,
-# ה-ID של MongoDB (שהוא אובייקט מיוחד) יטופל כמחרוזת טקסט.
+# A Type Alias to clarify that in our code, MongoDB's special ObjectId
+# will be treated as a string.
 PyObjectId = str
 
 # --------------------------------------------------------------------------
-# --- מודלים עבור CRUD API ---
-# אלו המודלים הגמישים שישמשו אותנו לבניית ה-API המלא.
+# --- Pydantic Models for the CRUD API ---
+# These models define the data shapes for validation and serialization.
 # --------------------------------------------------------------------------
 
 
 class SoldierBase(BaseModel):
     """
-    מודל בסיסי. מכיל רק את השדות שהמשתמש אמור לספק או לערוך.
+    Base model containing fields that are common to all soldier variants
+    and are provided by the user.
     """
 
     first_name: str
@@ -25,8 +27,8 @@ class SoldierBase(BaseModel):
 
 class SoldierCreate(SoldierBase):
     """
-    המודל שישמש לקבלת נתונים מהמשתמש ליצירת פריט חדש (בבקשת POST).
-    הוא יורש את השדות מ-SoldierBase ומוסיף את ה-ID המספרי.
+    Model used to receive data from the user when creating a new soldier (in a POST request).
+    It inherits all fields from SoldierBase and adds the mandatory numeric ID.
     """
 
     ID: int
@@ -34,8 +36,8 @@ class SoldierCreate(SoldierBase):
 
 class SoldierUpdate(BaseModel):
     """
-    המודל שישמש לקבלת נתונים לעדכון (בבקשת PUT/PATCH).
-    כל השדות אופציונליים, כדי לאפשר עדכון חלקי.
+    Model used to receive data for updating an existing soldier (in a PUT/PATCH request).
+    All fields are optional to allow for partial updates.
     """
 
     first_name: Optional[str] = None
@@ -46,15 +48,20 @@ class SoldierUpdate(BaseModel):
 
 class SoldierInDB(SoldierBase):
     """
-    מודל המייצג פריט שלם כפי שהוא קיים במסד הנתונים ויוחזר מה-API.
-    הוא כולל את כל השדות, כולל אלו שמנוהלים על ידי המערכת.
+    Model representing a complete soldier object as it exists in the database
+    and as it will be returned from the API.
+    It includes all fields, including system-managed ones like the MongoDB '_id'.
     """
 
-    # Field(alias='_id') מגשר בין שם השדה ב-MongoDB ('_id')
-    # לשם השדה שאנחנו חושפים ב-API ('id').
+    # The `alias` parameter in Field() bridges the gap between the MongoDB field name ('_id')
+    # and the field name we want to expose in our API ('id').
     id: PyObjectId = Field(alias="_id")
-    ID: int  # ה-ID המספרי שלנו
+    ID: int  # Our application-specific numeric ID
 
     class Config:
+        # Allows Pydantic to create a model instance from object attributes (e.g., db_result.id)
+        # and not just from dictionaries. Also known as ORM mode.
         from_attributes = True
+
+        # Allows populating the model using either the field name ('id') or its alias ('_id').
         populate_by_name = True

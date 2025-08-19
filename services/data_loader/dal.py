@@ -1,4 +1,4 @@
-# data_loader/dal.py
+# services/data_loader/dal.py
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -12,8 +12,9 @@ from .models import SoldierCreate, SoldierUpdate
 
 class DataLoader:
     """
-    קלאס זה הוא המומחה שלנו ל-MongoDB.
-    הוא מקבל את פרטי החיבור מבחוץ ואינו תלוי ישירות במשתני סביבה.
+    This class is our MongoDB expert.
+    It receives connection details from an external source and is not
+    directly dependent on environment variables.
     """
 
     def __init__(self, mongo_uri: str, db_name: str, collection_name: str):
@@ -25,7 +26,7 @@ class DataLoader:
         self.collection: Optional[Collection] = None
 
     async def connect(self):
-        """יוצר חיבור א-סינכרוני ל-MongoDB ומאתחל נתונים אם צריך."""
+        """Creates an asynchronous connection to MongoDB and sets up indexes if needed."""
         try:
             self.client = AsyncMongoClient(
                 self.mongo_uri, serverSelectionTimeoutMS=5000
@@ -43,18 +44,18 @@ class DataLoader:
             self.collection = None
 
     async def _setup_indexes(self):
-        """יוצר אינדקס ייחודי על השדה ID כדי למנוע כפילויות."""
+        """Creates a unique index on the 'ID' field to prevent duplicates."""
         if self.collection is not None:
             await self.collection.create_index("ID", unique=True)
             print("Unique index on 'ID' field ensured.")
 
     def disconnect(self):
-        """סוגר את החיבור למסד הנתונים."""
+        """Closes the connection to the database."""
         if self.client:
             self.client.close()
 
     async def get_all_data(self) -> List[Dict[str, Any]]:
-        """שולף את כל המסמכים. זורק RuntimeError אם אין חיבור."""
+        """Retrieves all documents. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
@@ -65,7 +66,7 @@ class DataLoader:
         return items
 
     async def get_item_by_id(self, item_id: int) -> Optional[Dict[str, Any]]:
-        """שולף מסמך בודד. זורק RuntimeError אם אין חיבור."""
+        """Retrieves a single document. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
@@ -75,7 +76,7 @@ class DataLoader:
         return item
 
     async def create_item(self, item: SoldierCreate) -> Dict[str, Any]:
-        """יוצר מסמך חדש. זורק שגיאות במקרה של כשל."""
+        """Creates a new document. Raises specific errors on failure."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
         try:
@@ -93,7 +94,7 @@ class DataLoader:
     async def update_item(
         self, item_id: int, item_update: SoldierUpdate
     ) -> Optional[Dict[str, Any]]:
-        """מעדכן מסמך קיים. זורק RuntimeError אם אין חיבור."""
+        """Updates an existing document. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
@@ -112,7 +113,7 @@ class DataLoader:
         return result
 
     async def delete_item(self, item_id: int) -> bool:
-        """מוחק מסמך. זורק RuntimeError אם אין חיבור."""
+        """Deletes a document. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
