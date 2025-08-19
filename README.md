@@ -11,6 +11,10 @@ The entire infrastructure is defined using declarative Kubernetes manifests and 
 -   **Full CRUD RESTful API:** Provides complete Create, Read, Update, and Delete (CRUD) functionality for the "soldiers" data model, adhering to REST principles.
 -   **Modular API Architecture:** Uses FastAPI's `APIRouter` and a dependency injection pattern to keep API logic clean, organized, and scalable.
 -   **Asynchronous DAL:** Implements a high-performance, asynchronous Data Access Layer (DAL) using `pymongo`'s async capabilities, which manages a connection pool for non-blocking database operations.
+-   **Comprehensive Logging:** Structured logging throughout the application with configurable log levels via environment variables.
+-   **Advanced Error Handling:** Multi-layered exception handling with proper HTTP status codes and detailed error messages.
+-   **Input Validation:** Helper functions to prevent code duplication and ensure consistent validation across endpoints.
+-   **Health Monitoring:** Dual health check endpoints - basic liveness checks and detailed readiness checks with database connectivity verification.
 -   **Declarative Infrastructure (IaC):** All OpenShift/Kubernetes resources are defined in standardized YAML manifests located in the `infrastructure/k8s` directory.
 -   **Dual Deployment Strategies:** Provides manifests for deploying MongoDB using both a standard `Deployment` and an advanced `StatefulSet` (the recommended approach for stateful applications).
 -   **Advanced Configuration Management:** Employs a clear separation between non-sensitive configuration (`ConfigMap`) and sensitive data like passwords (`Secret`).
@@ -47,6 +51,7 @@ The project is organized into distinct directories, each with its own detailed d
 │   ├── deploy-statefulset.bat# Windows version
 │   ├── demo_guide.md       # ➡️ Step-by-step manual deployment & usage guide
 │   └── run_api_tests.sh    # E2E test script for the API
+├── .env.example            # Environment variables template for local development
 ├── .gitignore
 ├── Dockerfile
 ├── requirements.txt
@@ -58,6 +63,42 @@ The project is organized into distinct directories, each with its own detailed d
 -   To understand the **Python code architecture**, read the **[Python Architecture Guide](./services/data_loader/README.md)**.
 -   To understand the **Kubernetes/OpenShift resources**, read the **[Infrastructure Manifests Guide](./infrastructure/k8s/README.md)**.
 -   For a **step-by-step manual deployment and testing guide**, follow the **[Manual Deployment & Usage Guide](./scripts/demo_guide.md)**.
+
+---
+
+## Local Development
+
+### Environment Setup
+1. **Copy environment template:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **For local development, the default values work as-is** (MongoDB without authentication)
+
+3. **Optional: Adjust log level in .env:**
+   ```bash
+   LOG_LEVEL=DEBUG  # For detailed logs
+   LOG_LEVEL=INFO   # Default
+   LOG_LEVEL=ERROR  # Minimal logs
+   ```
+
+### Running Locally
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run local MongoDB (using Docker)
+docker run -d -p 27017:27017 --name local-mongo mongo:8.0
+
+# Start the application
+uvicorn services.data_loader.main:app --reload --port 8000
+```
+
+### Local API Access
+- **Application:** http://localhost:8000
+- **API Documentation:** http://localhost:8000/docs
+- **Health Check:** http://localhost:8000/health
 
 ---
 
@@ -105,6 +146,51 @@ This approach uses a Kubernetes `StatefulSet`, which is the recommended practice
     ```
 
 The script will automatically build the Docker image, push it to Docker Hub, deploy all necessary resources to your OpenShift project, and print the final application URL.
+
+---
+
+## API Testing
+
+### Getting Your Application URL
+First, get the public URL of your deployed application:
+
+**For Deployment strategy:**
+```bash
+export API_URL="https://$(oc get route mongo-api-route -o jsonpath='{.spec.host}')"
+echo "Application URL: ${API_URL}"
+```
+
+**For StatefulSet strategy:**
+```bash
+export API_URL="https://$(oc get route mongo-api-route-stateful -o jsonpath='{.spec.host}')"
+echo "Application URL: ${API_URL}"
+```
+
+### Automated Testing
+Use the provided test script for comprehensive API validation:
+
+```bash
+# Run the automated test suite
+./scripts/run_api_tests.sh "${API_URL}"
+```
+
+The test script will automatically:
+- Test all CRUD operations
+- Validate error handling
+- Check data persistence
+- Verify API responses
+- Clean up test data
+
+### Manual Testing Examples
+For quick manual tests:
+
+```bash
+# Check if the API is running
+curl "${API_URL}/health"
+
+# View API documentation
+echo "API Documentation: ${API_URL}/docs"
+```
 
 ---
 

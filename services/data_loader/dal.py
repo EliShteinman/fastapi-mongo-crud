@@ -1,4 +1,5 @@
 # services/data_loader/dal.py
+import logging
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -8,6 +9,9 @@ from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .models import SoldierCreate, SoldierUpdate
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DataLoader:
@@ -34,11 +38,10 @@ class DataLoader:
             await self.client.admin.command("ping")
             self.db = self.client[self.db_name]
             self.collection = self.db[self.collection_name]
-            print("Successfully connected to MongoDB.")
+            logger.info("Successfully connected to MongoDB.")
             await self._setup_indexes()
         except PyMongoError as e:
-            print(f"!!! DATABASE CONNECTION FAILED !!!")
-            print(f"Error details: {e}")
+            logger.error(f"DATABASE CONNECTION FAILED: {e}")
             self.client = None
             self.db = None
             self.collection = None
@@ -46,39 +49,56 @@ class DataLoader:
     async def _setup_indexes(self):
         """Creates a unique index on the 'ID' field to prevent duplicates."""
         if self.collection is not None:
-            await self.collection.create_index("ID", unique=True)
-            print("Unique index on 'ID' field ensured.")
+            try:
+                await self.collection.create_index("ID", unique=True)
+                logger.info("Unique index on 'ID' field ensured.")
+            except PyMongoError as e:
+                logger.error(f"Failed to create index: {e}")
 
     def disconnect(self):
         """Closes the connection to the database."""
         if self.client:
             self.client.close()
+            logger.info("Disconnected from MongoDB.")
 
     async def get_all_data(self) -> List[Dict[str, Any]]:
         """Retrieves all documents. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
-        items: List[Dict[str, Any]] = []
-        async for item in self.collection.find({}):
-            item["_id"] = str(item["_id"])
-            items.append(item)
-        return items
+        try:
+            items: List[Dict[str, Any]] = []
+            async for item in self.collection.find({}):
+                item["_id"] = str(item["_id"])
+                items.append(item)
+            logger.info(f"Retrieved {len(items)} soldiers from database.")
+            return items
+        except PyMongoError as e:
+            logger.error(f"Error retrieving all data: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")
 
     async def get_item_by_id(self, item_id: int) -> Optional[Dict[str, Any]]:
         """Retrieves a single document. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
-        item = await self.collection.find_one({"ID": item_id})
-        if item:
-            item["_id"] = str(item["_id"])
-        return item
+        try:
+            item = await self.collection.find_one({"ID": item_id})
+            if item:
+                item["_id"] = str(item["_id"])
+                logger.info(f"Retrieved soldier with ID {item_id}.")
+            else:
+                logger.info(f"No soldier found with ID {item_id}.")
+            return item
+        except PyMongoError as e:
+            logger.error(f"Error retrieving item with ID {item_id}: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")
 
     async def create_item(self, item: SoldierCreate) -> Dict[str, Any]:
         """Creates a new document. Raises specific errors on failure."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
+
         try:
             item_dict = item.model_dump()
             insert_result = await self.collection.insert_one(item_dict)
@@ -87,9 +107,14 @@ class DataLoader:
             )
             if created_item:
                 created_item["_id"] = str(created_item["_id"])
+                logger.info(f"Successfully created soldier with ID {item.ID}.")
             return created_item
         except DuplicateKeyError:
+            logger.warning(f"Attempt to create duplicate soldier with ID {item.ID}.")
             raise ValueError(f"Item with ID {item.ID} already exists.")
+        except PyMongoError as e:
+            logger.error(f"Error creating item: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")
 
     async def update_item(
         self, item_id: int, item_update: SoldierUpdate
@@ -98,24 +123,41 @@ class DataLoader:
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
-        update_data = item_update.model_dump(exclude_unset=True)
+        try:
+            update_data = item_update.model_dump(exclude_unset=True)
 
-        if not update_data:
-            return await self.get_item_by_id(item_id)
+            if not update_data:
+                logger.info(f"No fields to update for soldier ID {item_id}.")
+                return await self.get_item_by_id(item_id)
 
-        result = await self.collection.find_one_and_update(
-            {"ID": item_id},
-            {"$set": update_data},
-            return_document=True,
-        )
-        if result:
-            result["_id"] = str(result["_id"])
-        return result
+            result = await self.collection.find_one_and_update(
+                {"ID": item_id},
+                {"$set": update_data},
+                return_document=True,
+            )
+            if result:
+                result["_id"] = str(result["_id"])
+                logger.info(f"Successfully updated soldier with ID {item_id}.")
+            else:
+                logger.info(f"No soldier found to update with ID {item_id}.")
+            return result
+        except PyMongoError as e:
+            logger.error(f"Error updating item with ID {item_id}: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")
 
     async def delete_item(self, item_id: int) -> bool:
         """Deletes a document. Raises RuntimeError if not connected."""
         if self.collection is None:
             raise RuntimeError("Database connection is not available.")
 
-        delete_result = await self.collection.delete_one({"ID": item_id})
-        return delete_result.deleted_count > 0
+        try:
+            delete_result = await self.collection.delete_one({"ID": item_id})
+            success = delete_result.deleted_count > 0
+            if success:
+                logger.info(f"Successfully deleted soldier with ID {item_id}.")
+            else:
+                logger.info(f"No soldier found to delete with ID {item_id}.")
+            return success
+        except PyMongoError as e:
+            logger.error(f"Error deleting item with ID {item_id}: {e}")
+            raise RuntimeError(f"Database operation failed: {e}")

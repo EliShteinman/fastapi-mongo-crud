@@ -1,4 +1,23 @@
-# מדריך טכני: ארכיטטורת קוד הפייתון
+## זרימת נתונים - דוגמה מלאה עם Logging
+
+כאשר משתמש שולח בקשה `POST /soldiersdb/` ליצירת חייל חדש:
+
+1. **FastAPI מקבל את הבקשה** ומפנה אותה ל-`soldiers.router`
+2. **הראוטר מפעיל** את `create_soldier()` ב-`crud/soldiers.py`
+3. **Logging תחילת פעולה:** `logger.info(f"Attempting to create soldier with ID {soldier.ID}")`
+4. **הפונקציה מבצעת ולידציה** על הנתונים באמצעות `SoldierCreate`
+5. **קריאה ל-DAL:** `await data_loader.create_item(soldier)`
+6. **ה-DAL מתחבר למונגו** ומכניס את המסמך עם logging
+7. **המסמך חוזר מהמסד** עם `_id` שנוסף אוטומטית
+8. **Logging הצלחה:** `logger.info(f"Successfully created soldier with ID {soldier.ID}")`
+9. **המרת ObjectId** למחרוזת ב-DAL
+10. **החזרת התוצאה** דרך הראוטר ל-FastAPI
+11. **FastAPI מבצע סריאליזציה** באמצעות `SoldierInDB`
+12. **החזרת JSON** ללקוח עם קוד סטטוס 201
+
+## עקרונות ארכיטקטוניים משופרים
+
+### הפרדת אחריויות (# מדריך טכני: ארכיטטורת קוד הפייתון
 
 מסמך זה מספק ניתוח טכני, קובץ אחר קובץ ושורה אחר שורה, של אפליקציית ה-FastAPI לניהול נתוני חיילים. המטרה היא להסביר את תפקידו של כל רכיב, את זרימת הנתונים, ואת ההיגיון מאחורי מבנה הקוד.
 
@@ -112,16 +131,21 @@ class SoldierInDB(SoldierBase):
 
 ## 3. `dal.py` - שכבת הגישה לנתונים (Data Access Layer)
 
-קובץ זה מכיל את כל הלוגיקה של התקשורת עם MongoDB. הוא לא יודע כלום על HTTP או FastAPI.
+קובץ זה מכיל את כל הלוגיקה של התקשורת עם MongoDB. הוא כולל logging מקיף לצורך ניטור ואבחון בעיות.
 
 ```python
-# שורות 4-10: ייבוא כל הכלים הדרושים למונגו ולטיפול בנתונים
+# שורות 2-11: ייבוא כל הכלים הדרושים למונגו, לטיפול בנתונים ולlogging
+import logging
 from bson import ObjectId                    # לטיפול ב-ObjectId של מונגו
 from pymongo import AsyncMongoClient         # הלקוח הא-סינכרוני
 from pymongo.errors import DuplicateKeyError, PyMongoError  # טיפול בשגיאות
 from .models import SoldierCreate, SoldierUpdate           # המודלים שלנו
 
-# שורות 13-26: הגדרת קלאס DataLoader - המומחה שלנו למונגו
+# שורות 13-14: הגדרת logging למודול זה
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# שורות 17-30: הגדרת קלאס DataLoader - המומחה שלנו למונגו
 class DataLoader:
     def __init__(self, mongo_uri: str, db_name: str, collection_name: str):
         # שמירת פרטי החיבור שהתקבלו מ-dependencies.py
@@ -133,245 +157,275 @@ class DataLoader:
         self.db: Optional[Database] = None
         self.collection: Optional[Collection] = None
 
-# שורות 28-44: מתודת החיבור - הלב של המערכת
+# שורות 32-48: מתודת החיבור - הלב של המערכת עם logging מפורט
 async def connect(self):
     try:
-        # שורות 31-32: יצירת חיבור עם timeout של 5 שניות
+        # שורות 35-36: יצירת חיבור עם timeout של 5 שניות
         self.client = AsyncMongoClient(self.mongo_uri, serverSelectionTimeoutMS=5000)
-        # שורה 34: שליחת 'ping' לוודא שהחיבור תקין (await = המתנה לתשובה)
+        # שורה 38: שליחת 'ping' לוודא שהחיבור תקין (await = המתנה לתשובה)
         await self.client.admin.command("ping")
-        # שורות 35-36: קבלת גישה למסד הנתונים ולקולקשן
+        # שורות 39-40: קבלת גישה למסד הנתונים ולקולקשן
         self.db = self.client[self.db_name]
         self.collection = self.db[self.collection_name]
-        # שורה 38: הקמת אינדקס ייחודי על שדה ה-ID
+        # הוספת logging להצלחת החיבור
+        logger.info("Successfully connected to MongoDB.")
+        # שורה 42: הקמת אינדקס ייחודי על שדה ה-ID
         await self._setup_indexes()
     except PyMongoError as e:
-        # במקרה של כשל - איפוס כל החיבורים והדפסת שגיאה
+        # הוספת logging לכשל בחיבור
+        logger.error(f"DATABASE CONNECTION FAILED: {e}")
         self.client = None
         self.db = None  
         self.collection = None
 
-# שורות 46-50: הקמת אינדקס ייחודי למניעת כפילות ID
+# שורות 49-56: הקמת אינדקס ייחודי עם logging
 async def _setup_indexes(self):
     if self.collection is not None:
-        # יצירת אינדקס ייחודי על שדה ה-'ID' - מונע הכנסה של ID זהה פעמיים
-        await self.collection.create_index("ID", unique=True)
+        try:
+            # יצירת אינדקס ייחודי על שדה ה-'ID' - מונע הכנסה של ID זהה פעמיים
+            await self.collection.create_index("ID", unique=True)
+            logger.info("Unique index on 'ID' field ensured.")
+        except PyMongoError as e:
+            logger.error(f"Failed to create index: {e}")
 
-# שורות 57-66: קריאת כל החיילים מהמסד
+# שורות 64-78: קריאת כל החיילים מהמסד עם logging ו-error handling משופר
 async def get_all_data(self) -> List[Dict[str, Any]]:
-    # שורות 59-60: ★ בדיקה קריטית ★ 
-    # אם החיבור נכשל, self.collection יהיה None
+    # בדיקה קריטית - אם החיבור נכשל, self.collection יהיה None
     if self.collection is None:
         raise RuntimeError("Database connection is not available.")
     
-    items: List[Dict[str, Any]] = []
-    # שורה 63: 'async for' - לולאה א-סינכרונית שמושכת מסמכים אחד אחד
-    async for item in self.collection.find({}):  # {} = כל המסמכים
-        # שורה 64: המרת ObjectId למחרוזת (JSON לא יודע מה זה ObjectId)
-        item["_id"] = str(item["_id"])
-        items.append(item)
-    return items
-
-# שורות 78-90: יצירת חייל חדש
-async def create_item(self, item: SoldierCreate) -> Dict[str, Any]:
-    if self.collection is None:
-        raise RuntimeError("Database connection is not available.")
     try:
-        # שורה 83: המרת המודל Pydantic למילון
-        item_dict = item.model_dump()
-        # שורה 84: הכנסת המסמך למסד הנתונים
-        insert_result = await self.collection.insert_one(item_dict)
-        # שורות 85-90: אחזור המסמך שנוצר (כולל ה-_id שנוסף אוטומטית)
-        created_item = await self.collection.find_one({"_id": insert_result.inserted_id})
-        if created_item:
-            created_item["_id"] = str(created_item["_id"])
-        return created_item
-    except DuplicateKeyError:
-        # שורה 92: אם ID כבר קיים, זריקת שגיאה ברורה
-        raise ValueError(f"Item with ID {item.ID} already exists.")
-
-# שורות 94-113: עדכון חייל קיים
-async def update_item(self, item_id: int, item_update: SoldierUpdate) -> Optional[Dict[str, Any]]:
-    if self.collection is None:
-        raise RuntimeError("Database connection is not available.")
-    
-    # שורה 101: יצירת מילון רק עם השדות שהשתנו (exclude_unset=True)
-    update_data = item_update.model_dump(exclude_unset=True)
-    
-    # שורות 103-104: אם אין מה לעדכן, החזרת החייל כמו שהוא
-    if not update_data:
-        return await self.get_item_by_id(item_id)
-    
-    # שורות 106-113: עדכון המסמך ב-MongoDB והחזרתו מעודכן
-    result = await self.collection.find_one_and_update(
-        {"ID": item_id},           # מציאת המסמך לפי ID
-        {"$set": update_data},     # עדכון השדות החדשים
-        return_document=True       # החזרת המסמך המעודכן
-    )
-    if result:
-        result["_id"] = str(result["_id"])
-    return result
+        items: List[Dict[str, Any]] = []
+        # 'async for' - לולאה א-סינכרונית שמושכת מסמכים אחד אחד
+        async for item in self.collection.find({}):  # {} = כל המסמכים
+            # המרת ObjectId למחרוזת (JSON לא יודע מה זה ObjectId)
+            item["_id"] = str(item["_id"])
+            items.append(item)
+        # logging לפעולה מוצלחת
+        logger.info(f"Retrieved {len(items)} soldiers from database.")
+        return items
+    except PyMongoError as e:
+        # logging ו-error handling
+        logger.error(f"Error retrieving all data: {e}")
+        raise RuntimeError(f"Database operation failed: {e}")
 ```
+
+**שיפורי Logging ו-Error Handling:**
+- כל פעולה מתועדת ב-log עם רמת חומרה מתאימה
+- שגיאות מתועדות עם פרטים מלאים
+- הצלחות מתועדות למעקב אחר ביצועים
+- כל exception מ-MongoDB נתפס ומתורגם לשגיאה ברורה
 
 ---
 
-## 4. `crud/soldiers.py` - שכבת ה-API (הראוטר)
+## 4. `crud/soldiers.py` - שכבת ה-API עם פונקציית עזר ו-logging מקיף
 
-קובץ זה מגדיר את נקודות הקצה של ה-API ומכיל את לוגיקת ה-HTTP. הוא "מתרגם" בין העולם של HTTP לעולם של מסד הנתונים.
+קובץ זה מגדיר את נקודות הקצה של ה-API ומכיל את לוגיקת ה-HTTP. הוא כולל שיפורים משמעותיים בניהול שגיאות ומניעת חזרה על קוד.
 
 ```python
-# שורות 4, 8: ייבוא הכלים מ-FastAPI והמודלים שלנו
+# שורות 2-10: ייבוא הכלים מ-FastAPI, logging ומודלים
+import logging
 from fastapi import APIRouter, HTTPException, status
+from pydantic import ValidationError
+from .. import models
 from ..dependencies import data_loader  # המופע המשותף של DataLoader
 
-# שורות 11-16: ★ יצירת APIRouter ★
+# שורה 12: יצירת logger ייעודי למודול זה
+logger = logging.getLogger(__name__)
+
+# שורות 15-20: יצירת APIRouter
 router = APIRouter(
     prefix="/soldiersdb",        # כל הכתובות כאן יתחילו ב-/soldiersdb
     tags=["Soldiers CRUD"],      # קיבוץ בתיעוד Swagger
 )
 
-# שורות 20-37: נקודת קצה ליצירת חייל חדש (POST)
-@router.post("/", response_model=models.SoldierInDB, status_code=status.HTTP_201_CREATED)
+# פונקציית עזר למניעת חזרה על קוד
+# שורות 24-30: פונקציה שמבצעת validation על soldier_id
+def validate_soldier_id(soldier_id: int):
+    """Validates that soldier_id is a positive integer."""
+    if soldier_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Soldier ID must be a positive integer",
+        )
+```
+
+**פונקציית העזר מונעת חזרה על הקוד הבא בכל endpoint:**
+```python
+# במקום לחזור על זה בכל פונקציה:
+if soldier_id <= 0:
+    raise HTTPException(status_code=422, detail="ID must be positive")
+
+# עכשיו פשוט קוראים:
+validate_soldier_id(soldier_id)
+```
+
+**שיפורי Error Handling ו-Logging:**
+
+```python
+# דוגמה מ-create_soldier (שורות 37-68):
 async def create_soldier(soldier: models.SoldierCreate):
-    # 'soldier: models.SoldierCreate' - FastAPI מבצע ולידציה אוטומטית על גוף הבקשה
     try:
-        # קריאה לשכבת ה-DAL ליצירת החייל
+        # logging תחילת פעולה
+        logger.info(f"Attempting to create soldier with ID {soldier.ID}")
         created_soldier = await data_loader.create_item(soldier)
+        # logging הצלחה
+        logger.info(f"Successfully created soldier with ID {soldier.ID}")
         return created_soldier
     except ValueError as e:
-        # תפיסת שגיאת 'ID כפול' מה-DAL והפיכתה לשגיאת HTTP 409 Conflict
+        # טיפול בשגיאת ID כפול
+        logger.warning(f"Conflict creating soldier with ID {soldier.ID}: {str(e)}")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except RuntimeError as e:
-        # תפיסת שגיאת חיבור מה-DAL והפיכתה ל-503 Service Unavailable
+        # טיפול בשגיאת חיבור למסד נתונים
+        logger.error(f"Database error creating soldier: {str(e)}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+    except ValidationError as e:
+        # הוספת טיפול בשגיאות Pydantic
+        logger.warning(f"Validation error creating soldier: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        # הוספת catch-all לשגיאות לא צפויות
+        logger.error(f"Unexpected error creating soldier: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                           detail="An unexpected error occurred")
+```
 
-# שורות 41-51: קבלת כל החיילים (GET)
-@router.get("/", response_model=List[models.SoldierInDB])
-async def read_all_soldiers():
-    try:
-        return await data_loader.get_all_data()
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
-
-# שורות 55-71: קבלת חייל בודד לפי ID (GET)
-@router.get("/{soldier_id}", response_model=models.SoldierInDB)
+**שימוש בפונקציית העזר:**
+```python
+# בכל endpoint שמקבל soldier_id (שורות 101, 136, 176):
+@router.get("/{soldier_id}")
 async def read_soldier_by_id(soldier_id: int):
-    # 'soldier_id: int' - FastAPI מתרגם אוטומטית מה-URL למספר שלם
-    try:
-        soldier = await data_loader.get_item_by_id(soldier_id)
-        if soldier is None:
-            # אם החייל לא נמצא, החזרת שגיאה 404
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Soldier with ID {soldier_id} not found"
-            )
-        return soldier
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
-
-# שורות 75-91: עדכון חייל קיים (PUT)
-@router.put("/{soldier_id}", response_model=models.SoldierInDB)
-async def update_soldier(soldier_id: int, soldier_update: models.SoldierUpdate):
-    # שני פרמטרים: ID מה-URL ונתוני העדכון מגוף הבקשה
-    try:
-        updated_soldier = await data_loader.update_item(soldier_id, soldier_update)
-        if updated_soldier is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Soldier with ID {soldier_id} not found to update"
-            )
-        return updated_soldier
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
-
-# שורות 95-112: מחיקת חייל (DELETE)
-@router.delete("/{soldier_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_soldier(soldier_id: int):
-    try:
-        success = await data_loader.delete_item(soldier_id)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Soldier with ID {soldier_id} not found to delete"
-            )
-        # 204 No Content - מחיקה מוצלחת ללא גוף תשובה
-        return
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
+    validate_soldier_id(soldier_id)  # קריאה לפונקציית העזר
+    # המשך הקוד...
 ```
 
 ---
 
-## 5. `main.py` - הרכבת האפליקציה
+## 5. `main.py` - הרכבת האפליקציה עם ניהול מתקדם של מחזור החיים
 
-הקובץ הראשי שמחבר את כל החלקים ויוצר את אפליקציית FastAPI המוגמרת.
+הקובץ הראשי שמחבר את כל החלקים ויוצר את אפליקציית FastAPI המוגמרת, כולל ניהול logging מתקדם ו-health checks.
 
 ```python
-# שורות 2, 6-7: ייבוא הכלים הדרושים
+# שורות 2-9: ייבוא הכלים הדרושים כולל logging ו-os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import logging
+import os
+from fastapi import FastAPI, HTTPException, status
 from .crud import soldiers              # הראוטר שיצרנו
 from .dependencies import data_loader   # מופע ה-DataLoader המשותף
 
-# שורות 10-21: ★ ניהול מחזור החיים של האפליקציה ★
+# קריאת רמת logging ממשתני סביבה
+# שורות 11-14: הגדרת logging דינמית לפי משתני סביבה
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
+logger = logging.getLogger(__name__)
+
+# ניהול מחזור החיים עם error handling
+# שורות 17-38: ניהול מחזור החיים של האפליקציה עם logging
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # הקוד לפני 'yield' רץ בעליית השרת
-    print("Application startup: connecting to database...")
-    await data_loader.connect()  # התחברות למסד הנתונים
+    logger.info("Application startup: connecting to database...")
+    try:
+        await data_loader.connect()  # התחברות למסד הנתונים
+        logger.info("Database connection established successfully.")
+    except Exception as e:
+        # לא לזרוק exception - לתת לאפליקציה להתחיל
+        logger.error(f"Failed to connect to database: {e}")
+    
     yield                        # כאן השרת רץ ומקבל בקשות...
+    
     # הקוד אחרי 'yield' רץ בכיבוי השרת  
-    print("Application shutdown: disconnecting from database...")
-    data_loader.disconnect()     # התנתקות ממסד הנתונים
+    logger.info("Application shutdown: disconnecting from database...")
+    try:
+        data_loader.disconnect()     # התנתקות ממסד הנתונים
+        logger.info("Database disconnection completed.")
+    except Exception as e:
+        logger.error(f"Error during database disconnection: {e}")
+```
 
-# שורות 25-30: יצירת אפליקציית FastAPI הראשית
-app = FastAPI(
-    lifespan=lifespan,           # העברת פונקציית מחזור החיים
-    title="FastAPI MongoDB CRUD Service",
-    version="2.0",
-    description="A microservice for managing soldier data, deployed on OpenShift."
-)
+**שיפורי Health Checks:**
 
-# שורה 34: ★★★ החיבור המרכזי ★★★
-# פקודה זו "מחברת" את כל נקודות הקצה שהוגדרו ב-soldiers.py לאפליקציה הראשית
-# כל ה-routes מ-soldiers.router הופכים זמינים דרך האפליקציה הראשית
-app.include_router(soldiers.router)
-
-# שורות 37-43: נקודת קצה לבדיקת בריאות השרת
+```python
+# שורות 54-60: health check בסיסי (לliveness probe)
 @app.get("/")
 def health_check_endpoint():
-    # משמש את OpenShift לבדיקות readiness ו-liveness
-    return {"status": "ok"}
+    """Basic health check - used by OpenShift liveness probe"""
+    return {"status": "ok", "service": "FastAPI MongoDB CRUD Service"}
+
+# health check מתקדם (לreadiness probe)
+# שורות 63-82: health check מפורט עם בדיקת מסד נתונים
+@app.get("/health")
+def detailed_health_check():
+    """Detailed health check that verifies database connectivity"""
+    db_status = "connected" if data_loader.collection is not None else "disconnected"
+    
+    # זריקת שגיאה אם המסד לא זמין
+    if db_status == "disconnected":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available"
+        )
+    
+    return {
+        "status": "ok",
+        "service": "FastAPI MongoDB CRUD Service",
+        "version": "2.0",
+        "database_status": db_status
+    }
 ```
+
+**הבדל בין Health Checks:**
+- **`/`** - בדיקה פשוטה שהשרת חי (liveness probe)
+- **`/health`** - בדיקה מפורטת כולל מסד נתונים (readiness probe)
 
 ---
 
-## זרימת נתונים - דוגמה מלאה
+## זרימת נתונים - דוגמה מלאה עם Logging
 
 כאשר משתמש שולח בקשה `POST /soldiersdb/` ליצירת חייל חדש:
 
 1. **FastAPI מקבל את הבקשה** ומפנה אותה ל-`soldiers.router`
 2. **הראוטר מפעיל** את `create_soldier()` ב-`crud/soldiers.py`
-3. **הפונקציה מבצעת ולידציה** על הנתונים באמצעות `SoldierCreate`
-4. **קריאה ל-DAL**: `await data_loader.create_item(soldier)`
-5. **ה-DAL מתחבר למונגו** ומכניס את המסמך
-6. **המסמך חוזר מהמסד** עם `_id` שנוסף אוטומטית  
-7. **המרת ObjectId** למחרוזת ב-DAL
-8. **החזרת התוצאה** דרך הראוטר ל-FastAPI
-9. **FastAPI מבצע סריאליזציה** באמצעות `SoldierInDB` 
-10. **החזרת JSON** ללקוח עם קוד סטטוס 201
+3. **Logging תחילת פעולה:** `logger.info(f"Attempting to create soldier with ID {soldier.ID}")`
+4. **הפונקציה מבצעת ולידציה** על הנתונים באמצעות `SoldierCreate`
+5. **קריאה ל-DAL:** `await data_loader.create_item(soldier)`
+6. **ה-DAL מתחבר למונגו** ומכניס את המסמך עם logging
+7. **המסמך חוזר מהמסד** עם `_id` שנוסף אוטומטית
+8. **Logging הצלחה:** `logger.info(f"Successfully created soldier with ID {soldier.ID}")`
+9. **המרת ObjectId** למחרוזת ב-DAL
+10. **החזרת התוצאה** דרך הראוטר ל-FastAPI
+11. **FastAPI מבצע סריאליזציה** באמצעות `SoldierInDB`
+12. **החזרת JSON** ללקוח עם קוד סטטוס 201
 
 ## עקרונות ארכיטקטוניים
 
 ### הפרדת אחריויות (Separation of Concerns)
 - **models.py**: רק הגדרות נתונים
-- **dal.py**: רק לוגיקת מסד נתונים  
-- **crud/soldiers.py**: רק לוגיקת HTTP/API
-- **main.py**: רק הרכבה ותצורה
+- **dal.py**: רק לוגיקת מסד נתונים + logging
+- **crud/soldiers.py**: רק לוגיקת HTTP/API + validation helpers + logging
+- **main.py**: רק הרכבה, תצורה וניהול מחזור חיים + logging
 - **dependencies.py**: רק ניהול תלויות
 
 ### ניהול שגיאות רב-שכבתי
-כל שכבה מטפלת בשגיאות ברמה שלה ומעבירה אותן הלאה בצורה מתאימה.
+- כל שכבה מטפלת בשגיאות ברמה שלה
+- Logging מפורט בכל רמה
+- Exception handling מקיף עם fallback ל-500 errors
+- הבחנה בין שגיאות client (4xx) ו-server (5xx)
 
-### קונפיגורציה חיצונית  
-כל ההגדרות נקראות ממשתני סביבה, מה שמאפשר פריסה גמישה בסביבות שונות.
+### Logging מקיף
+- רמת logging נקבעת ממשתני סביבה
+- כל פעולה מתועדת (התחלה והסיום)
+- שגיאות מתועדות עם פרטים מלאים
+- ניטור ביצועים (כמה רשומות נמצאו/נוצרו)
+
+### קונפיגורציה חיצונית
+- כל ההגדרות נקראות ממשתני סביבה
+- כולל רמת logging דינמית
+- תמיכה בסביבות שונות (local vs OpenShift)
+
+### DRY (Don't Repeat Yourself)
+- פונקציות עזר למניעת חזרה על קוד
+- validation מרוכז
+- error handling patterns עקביים
