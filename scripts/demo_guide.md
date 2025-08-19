@@ -50,7 +50,7 @@ export IMAGE_TAG=demo-$(date +%s)
 ```batch
 @REM !!! החלף את 'your-dockerhub-username' בשם המשתמש שלך !!!
 set "DOCKERHUB_USERNAME=your-dockerhub-username"
-FOR /F "tokens=*" %%g IN ('powershell -Command "Get-Date -UFormat +%%s"') DO SET "IMAGE_TAG=demo-%%g"
+FOR /F "delims=" %%g IN ('powershell -NoProfile -Command "Get-Date -UFormat %s"') DO SET "IMAGE_TAG=demo-%%g"
 ```
 </details>
 
@@ -116,7 +116,7 @@ sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|docker.io/
 <summary>🪟 <strong>עבור Windows (עם PowerShell)</strong></summary>
 
 ```batch
-powershell -Command "(Get-Content -Raw infrastructure\k8s\05-fastapi-deployment.yaml).Replace('docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', 'docker.io/%DOCKERHUB_USERNAME%/fastapi-mongo-crud:%IMAGE_TAG%') | oc apply -f -"
+powershell -NoProfile -Command "(Get-Content -Raw infrastructure\k8s\05-fastapi-deployment.yaml) -replace 'docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', ('docker.io/{0}/fastapi-mongo-crud:{1}' -f $env:DOCKERHUB_USERNAME, $env:IMAGE_TAG) | oc apply -f -"
 ```
 </details>
 
@@ -215,7 +215,7 @@ sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|docker.io/
 <summary>🪟 <strong>עבור Windows (עם PowerShell)</strong></summary>
 
 ```batch
-powershell -Command "(Get-Content -Raw infrastructure\k8s\05a-fastapi-deployment-for-statefulset.yaml).Replace('docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', 'docker.io/%DOCKERHUB_USERNAME%/fastapi-mongo-crud:%IMAGE_TAG%') | oc apply -f -"
+powershell -NoProfile -Command "(Get-Content -Raw infrastructure\k8s\05a-fastapi-deployment-for-statefulset.yaml) -replace 'docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', ('docker.io/{0}/fastapi-mongo-crud:{1}' -f $env:DOCKERHUB_USERNAME, $env:IMAGE_TAG) | oc apply -f -"
 ```
 </details>
 
@@ -255,9 +255,11 @@ echo "Application URL: https://${ROUTE_URL}"
 
 ```batch
 @REM עבור מסלול Deployment
-FOR /F "tokens=*" %%g IN ('oc get route mongo-api-route -o jsonpath="{.spec.host}"') DO SET "ROUTE_URL=%%g"
+FOR /F "usebackq tokens=*" %%g IN (`oc get route mongo-api-route -o jsonpath={.spec.host}`) DO SET "ROUTE_URL=%%g"
+
 @REM עבור מסלול StatefulSet
-@REM FOR /F "tokens=*" %%g IN ('oc get route mongo-api-route-stateful -o jsonpath="{.spec.host}"') DO SET "ROUTE_URL=%%g"
+@REM FOR /F "usebackq tokens=*" %%g IN (`oc get route mongo-api-route-stateful -o jsonpath={.spec.host}`) DO SET "ROUTE_URL=%%g"
+
 echo Application URL: https://%ROUTE_URL%
 ```
 </details>

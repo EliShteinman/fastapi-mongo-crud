@@ -42,7 +42,6 @@ async def get_data_endpoint():
     היא כוללת טיפול בשגיאות שיכולות לחזור משכבת ה-DAL.
     """
 
-    # ★★★ הוספת טיפול בשגיאות ★★★
     try:
         all_items = await data_loader.get_all_data()
         return all_items
