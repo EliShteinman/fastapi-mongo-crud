@@ -8,20 +8,22 @@ from ..dependencies import data_loader
 
 # יוצרים אובייקט APIRouter. חשוב עליו כעל "מיני-אפליקציה" נפרדת.
 router = APIRouter(
-    prefix="/items",  # כל הנתיבים כאן יתחילו אוטומטית ב-/items
-    tags=["Items CRUD"],  # שם הקבוצה בתיעוד ה-Swagger
+    prefix="/soldiersdb",  # כל הנתיבים כאן יתחילו אוטומטית ב-/soldiersdb
+    tags=["soldiersdb CRUD"],  # שם הקבוצה בתיעוד ה-Swagger
 )
 
 
 # --- CREATE ---
-@router.post("/", response_model=models.ItemInDB, status_code=status.HTTP_201_CREATED)
-async def create_item(item: models.ItemCreate):
+@router.post(
+    "/", response_model=models.SoldierInDB, status_code=status.HTTP_201_CREATED
+)
+async def create_soldier(soldier: models.SoldierCreate):
     """
-    יוצר פריט חדש במסד הנתונים.
+    יוצר חייל חדש במסד הנתונים.
     """
     try:
-        created_item = await data_loader.create_item(item)
-        return created_item
+        created_soldier = await data_loader.create_item(soldier)
+        return created_soldier
     except ValueError as e:
         # תופסים את שגיאת ה-ID הכפול מה-DAL
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -32,11 +34,10 @@ async def create_item(item: models.ItemCreate):
 
 
 # --- READ (All) ---
-@router.get("/", response_model=List[models.ItemInDB])
-async def read_all_items():
+@router.get("/", response_model=List[models.SoldierInDB])
+async def read_all_soldiers():
     """
-    שולף את כל הפריטים ממסד הנתונים.
-    זוהי הגרסה המודרנית של נקודת הקצה /data.
+    שולף את כל החיילים ממסד הנתונים.
     """
     try:
         return await data_loader.get_all_data()
@@ -47,19 +48,19 @@ async def read_all_items():
 
 
 # --- READ (Single) ---
-@router.get("/{item_id}", response_model=models.ItemInDB)
-async def read_item_by_id(item_id: int):
+@router.get("/{soldier_id}", response_model=models.SoldierInDB)
+async def read_soldier_by_id(soldier_id: int):
     """
     שולף פריט בודד לפי ה-ID המספרי שלו.
     """
     try:
-        item = await data_loader.get_item_by_id(item_id)
-        if item is None:
+        soldier = await data_loader.get_item_by_id(soldier_id)
+        if soldier is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Item with ID {item_id} not found",
+                detail=f"Item with ID {soldier_id} not found",
             )
-        return item
+        return soldier
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
@@ -67,19 +68,19 @@ async def read_item_by_id(item_id: int):
 
 
 # --- UPDATE ---
-@router.put("/{item_id}", response_model=models.ItemInDB)
-async def update_item(item_id: int, item_update: models.ItemUpdate):
+@router.put("/{soldier_id}", response_model=models.SoldierInDB)
+async def update_soldier(soldier_id: int, soldier_update: models.SoldierUpdate):
     """
-    מעדכן פריט קיים לפי ה-ID המספרי שלו.
+    מעדכן חייל קיים לפי ה-ID המספרי שלו.
     """
     try:
-        updated_item = await data_loader.update_item(item_id, item_update)
-        if updated_item is None:
+        soldier_item = await data_loader.update_item(soldier_id, soldier_update)
+        if soldier_item is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Item with ID {item_id} not found to update",
+                detail=f"Item with ID {soldier_id} not found to update",
             )
-        return updated_item
+        return soldier_item
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
@@ -87,17 +88,17 @@ async def update_item(item_id: int, item_update: models.ItemUpdate):
 
 
 # --- DELETE ---
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_item(item_id: int):
+@router.delete("/{soldier_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_soldier(soldier_id: int):
     """
-    מוחק פריט קיים לפי ה-ID המספרי שלו.
+    מוחק חייל קיים לפי ה-ID המספרי שלו.
     """
     try:
-        success = await data_loader.delete_item(item_id)
+        success = await data_loader.delete_item(soldier_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Item with ID {item_id} not found to delete",
+                detail=f"Item with ID {soldier_id} not found to delete",
             )
         # עם סטטוס 204, לא מחזירים גוף תשובה
         return

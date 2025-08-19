@@ -12,25 +12,27 @@ PyObjectId = str
 # --------------------------------------------------------------------------
 
 
-class ItemBase(BaseModel):
+class SoldierBase(BaseModel):
     """
     מודל בסיסי. מכיל רק את השדות שהמשתמש אמור לספק או לערוך.
     """
 
     first_name: str
     last_name: str
+    phone_number: int
+    rank: str
 
 
-class ItemCreate(ItemBase):
+class SoldierCreate(SoldierBase):
     """
     המודל שישמש לקבלת נתונים מהמשתמש ליצירת פריט חדש (בבקשת POST).
-    הוא יורש את השדות מ-ItemBase ומוסיף את ה-ID המספרי.
+    הוא יורש את השדות מ-SoldierBase ומוסיף את ה-ID המספרי.
     """
 
     ID: int
 
 
-class ItemUpdate(BaseModel):
+class SoldierUpdate(BaseModel):
     """
     המודל שישמש לקבלת נתונים לעדכון (בבקשת PUT/PATCH).
     כל השדות אופציונליים, כדי לאפשר עדכון חלקי.
@@ -38,9 +40,11 @@ class ItemUpdate(BaseModel):
 
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone_number: Optional[int] = None
+    rank: Optional[str] = None
 
 
-class ItemInDB(ItemBase):
+class SoldierInDB(SoldierBase):
     """
     מודל המייצג פריט שלם כפי שהוא קיים במסד הנתונים ויוחזר מה-API.
     הוא כולל את כל השדות, כולל אלו שמנוהלים על ידי המערכת.
@@ -54,18 +58,3 @@ class ItemInDB(ItemBase):
     class Config:
         from_attributes = True
         populate_by_name = True
-
-
-# --------------------------------------------------------------------------
-# --- מודל עבור הדרישה המקורית (Legacy Endpoint) ---
-# --------------------------------------------------------------------------
-
-
-class OriginalItem(ItemInDB):
-    """
-    מודל זה מיועד ספציפית לנקודת הקצה המקורית GET /data.
-    הוא יורש את כל השדות, ההגדרות (כולל המרת ה-ID) וההתנהגות
-    מהמודל הראשי ItemInDB. זה מבטיח עקביות ומונע כפילות קוד.
-    """
-
-    pass

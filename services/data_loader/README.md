@@ -143,6 +143,7 @@ class ItemInDB(ItemBase):
 
 ```python
 from fastapi import APIRouter, HTTPException, status
+
 # ... (ייבואים נוספים)
 
 # שורה 10: יוצרים APIRouter.
@@ -150,15 +151,16 @@ from fastapi import APIRouter, HTTPException, status
 # 'tags' מארגן את נקודות הקצה בתיעוד ה-Swagger.
 router = APIRouter(prefix="/items", tags=["Items CRUD"])
 
+
 # שורה 17: הדקורטור @router.post מגדיר נקודת קצה.
 # 'response_model' אומר ל-FastAPI מה יהיה מבנה התשובה המוצלחת.
 # 'status_code' קובע את קוד ה-HTTP שיוחזר בהצלחה.
-@router.post("/", response_model=models.ItemInDB, status_code=status.HTTP_201_CREATED)
-async def create_item(item: models.ItemCreate):
+@router.post("/", response_model=models.SoldierInDB, status_code=status.HTTP_201_CREATED)
+async def create_item(item: models.SoldierCreate):
     # 'item: models.ItemCreate' מבצע ולידציה אוטומטית על גוף הבקשה.
     try:
         # קוראים למתודה המתאימה ב-DAL.
-        created_item = await data_loader.create_item(item)
+        created_item = await data_loader.create_soldier(item)
         return created_item
     except ValueError as e:
         # תופסים שגיאת 'ID כפול' מה-DAL והופכים אותה לשגיאת HTTP 409.

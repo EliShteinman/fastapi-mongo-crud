@@ -73,8 +73,5 @@ ROUTE_URL=$(oc get route mongo-api-route-stateful -o jsonpath='{.spec.host}')
 echo "Your application is available at the following URL:"
 echo "https://${ROUTE_URL}"
 echo ""
-echo "To fetch the original data, navigate to:"
-echo "https://${ROUTE_URL}/data"
-echo ""
 echo "To view the interactive API documentation (Swagger UI), navigate to:"
 echo "https://${ROUTE_URL}/docs"

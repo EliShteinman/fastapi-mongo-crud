@@ -86,9 +86,6 @@ echo Your application is available at the following URL:
 REM UPDATED: Displaying the URL with https
 echo https://%ROUTE_URL%
 echo.
-echo To fetch the original data, navigate to:
-echo https://%ROUTE_URL%/data
-echo.
 echo To view the interactive API documentation (Swagger UI), navigate to:
 echo https://%ROUTE_URL%/docs
 echo ================================================================================
