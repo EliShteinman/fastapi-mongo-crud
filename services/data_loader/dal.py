@@ -2,7 +2,6 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from bson import ObjectId
 from pymongo import AsyncMongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
