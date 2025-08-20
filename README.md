@@ -1,5 +1,7 @@
 # FastAPI MongoDB CRUD Service for OpenShift
 
+🌍 **Language:** **[English](README.md)** | [עברית](README.he.md)
+
 ## Overview
 
 This project is a robust, production-ready RESTful API for managing a "soldiers" database, built with Python FastAPI and MongoDB. Designed for cloud-native deployment on OpenShift, it serves as a comprehensive template for developing and deploying modern microservices, adhering to best practices in software architecture and infrastructure as code.
@@ -27,7 +29,7 @@ The entire infrastructure is defined using declarative Kubernetes manifests and 
 
 ## Project Structure & Documentation
 
-The project is organized into distinct directories, each with its own detailed documentation (in Hebrew).
+The project is organized into distinct directories, each with its own detailed documentation.
 
 ```
 .
@@ -49,6 +51,7 @@ The project is organized into distinct directories, each with its own detailed d
 │   ├── deploy.bat          # Windows version
 │   ├── deploy-statefulset.sh # Automated deployment script (StatefulSet strategy)
 │   ├── deploy-statefulset.bat# Windows version
+│   ├── README.md           # ➡️ Scripts overview and quick start
 │   ├── demo_guide.md       # ➡️ Step-by-step manual deployment & usage guide
 │   └── run_api_tests.sh    # E2E test script for the API
 ├── .env.example            # Environment variables template for local development
@@ -60,9 +63,10 @@ The project is organized into distinct directories, each with its own detailed d
 
 ### Navigating the Documentation
 
--   To understand the **Python code architecture**, read the **[Python Architecture Guide](./services/data_loader/README.md)**.
--   To understand the **Kubernetes/OpenShift resources**, read the **[Infrastructure Manifests Guide](./infrastructure/k8s/README.md)**.
--   For a **step-by-step manual deployment and testing guide**, follow the **[Manual Deployment & Usage Guide](./scripts/demo_guide.md)**.
+-   **🚀 Quick Start:** Use the automated scripts in **[scripts/](./scripts/)**
+-   **📚 Complete Manual Guide:** Follow the **[Manual Deployment & Usage Guide](scripts/demo_guide.md)** for step-by-step instructions
+-   **⚙️ Python Architecture:** Read the **[Python Architecture Guide](services/data_loader/README.md)** to understand the code structure
+-   **🔧 Infrastructure Details:** Read the **[Infrastructure Manifests Guide](infrastructure/k8s/README.md)** to understand the Kubernetes/OpenShift resources
 
 ---
 
@@ -196,4 +200,4 @@ echo "API Documentation: ${API_URL}/docs"
 
 ## Manual Deployment & API Testing
 
-For detailed, step-by-step instructions on how to deploy the application manually and test the API endpoints using `curl`, please refer to the **[Manual Deployment & Usage Guide](./scripts/demo_guide.md)**.
+For detailed, step-by-step instructions on how to deploy the application manually and test the API endpoints using `curl`, please refer to the **[Manual Deployment & Usage Guide](scripts/demo_guide.md)**.

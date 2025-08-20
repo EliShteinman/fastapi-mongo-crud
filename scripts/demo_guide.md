@@ -1,43 +1,45 @@
-# מדריך פריסה ושימוש: אפליקציית FastAPI ו-MongoDB ל-OpenShift
+# Deployment and Usage Guide: FastAPI and MongoDB Application for OpenShift
 
-מדריך זה מציג פריסה מלאה של אפליקציה ותשתית ל-OpenShift, שלב אחר שלב.
-הוא מכסה שני מסלולי פריסה עיקריים למסד הנתונים:
-1. **Deployment:** הדרך הסטנדרטית והגמישה לפריסת רוב היישומים.
-2. **StatefulSet:** הדרך המומלצת ליישומים הדורשים זהות רשת יציבה ואחסון קבוע, כמו מסדי נתונים.
+🌍 **Language:** **[English](demo_guide.md)** | [עברית](demo_guide.he.md)
 
-בכל מסלול, נדגים שתי שיטות פריסה:
-* **דקלרטיבית (עם קבצי YAML):** השיטה המומלצת לפרודקשן (Infrastructure as Code).
-* **אימפרטיבית (עם פקודות CLI ישירות):** לשימוש מהיר ולפיתוח.
+This guide presents a complete deployment of application and infrastructure to OpenShift, step by step.
+It covers two main deployment paths for the database:
+1. **Deployment:** The standard and flexible way for deploying most applications.
+2. **StatefulSet:** The recommended way for applications requiring stable network identity and persistent storage, like databases.
+
+In each path, we'll demonstrate two deployment methods:
+* **Declarative (with YAML files):** The recommended method for production (Infrastructure as Code).
+* **Imperative (with direct CLI commands):** For quick use and development.
 
 ---
 
-## שלב 0: הכנות מקדימות (משותף לכל המסלולים)
+## Step 0: Preliminary Setup (Common to All Paths)
 
-ודא שהכלים הבאים מותקנים ומוכנים לשימוש: `oc`, `docker`, `git`.
+Ensure the following tools are installed and ready for use: `oc`, `docker`, `git`.
 
-### 1. התחברות ל-OpenShift
+### 1. Connect to OpenShift
 ```bash
 oc login --token=<your-token> --server=<your-server-url>
 ```
 
-### 2. יצירת פרויקט חדש
+### 2. Create a New Project
 ```bash
 oc new-project fastapi-mongo-demo
 ```
 
-### 3. התחברות ל-Docker Hub
+### 3. Login to Docker Hub
 ```bash
 docker login
 ```
 
-### 4. הגדרת משתנים
-**!!! חשוב:** בצע שלב זה בטרמינל שבו תריץ את שאר הפקודות.
+### 4. Set Variables
+**!!! Important:** Execute this step in the terminal where you'll run the rest of the commands.
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS</strong></summary>
+<summary>💻 <strong>For Linux / macOS</strong></summary>
 
 ```bash
-# !!! החלף את 'your-dockerhub-username' בשם המשתמש שלך !!!
+# !!! Replace 'your-dockerhub-username' with your username !!!
 export DOCKERHUB_USERNAME='your-dockerhub-username'
 export IMAGE_TAG="demo-$(date +%s)"
 export FULL_IMAGE_NAME="docker.io/${DOCKERHUB_USERNAME}/fastapi-mongo-crud:${IMAGE_TAG}"
@@ -46,21 +48,21 @@ export FULL_IMAGE_NAME="docker.io/${DOCKERHUB_USERNAME}/fastapi-mongo-crud:${IMA
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (CMD)</strong></summary>
+<summary>🪟 <strong>For Windows (CMD)</strong></summary>
 
 ```batch
-@REM !!! החלף את 'your-dockerhub-username' בשם המשתמש שלך !!!
+@REM !!! Replace 'your-dockerhub-username' with your username !!!
 set "DOCKERHUB_USERNAME=your-dockerhub-username"
 FOR /F "delims=" %%g IN ('powershell -NoProfile -Command "Get-Date -UFormat %s"') DO SET "IMAGE_TAG=demo-%%g"
 set "FULL_IMAGE_NAME=docker.io/%DOCKERHUB_USERNAME%/fastapi-mongo-crud:%IMAGE_TAG%"
 ```
 </details>
 
-### 5. בניית והעלאת Docker Image
-האימג' ישותף בין כל מסלולי הפריסה.
+### 5. Build and Push Docker Image
+The image will be shared across all deployment paths.
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS</strong></summary>
+<summary>💻 <strong>For Linux / macOS</strong></summary>
 
 ```bash
 echo "Building and pushing image: ${FULL_IMAGE_NAME}"
@@ -70,7 +72,7 @@ docker buildx build --platform linux/amd64,linux/arm64 --no-cache -t "${FULL_IMA
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (CMD)</strong></summary>
+<summary>🪟 <strong>For Windows (CMD)</strong></summary>
 
 ```batch
 echo "Building and pushing image: %FULL_IMAGE_NAME%"
@@ -80,54 +82,54 @@ docker buildx build --platform linux/amd64,linux/arm64 --no-cache -t "%FULL_IMAG
 
 ---
 
-## מסלול א': פריסה עם `Deployment` (הגישה הסטנדרטית)
+## Path A: Deployment with `Deployment` (The Standard Approach)
 
-### חלק א' - פריסה דקלרטיבית (YAML)
-זוהי הדרך המומלצת לפרודקשן.
+### Part A - Declarative Deployment (YAML)
+This is the recommended way for production.
 
-#### 1. פריסת תשתית MongoDB
+#### 1. MongoDB Infrastructure Deployment
 
-**צעד 1.1: יצירת ConfigMap למידע תצורה**
+**Step 1.1: Create ConfigMap for Configuration Information**
 
-הקובץ `00-mongo-configmap.yaml` מכיל הגדרות תצורה לא-רגישות של MongoDB:
+The `00-mongo-configmap.yaml` file contains non-sensitive MongoDB configuration:
 ```bash
 oc apply -f infrastructure/k8s/00-mongo-configmap.yaml
 ```
-*מה זה עושה:* יוצר ConfigMap ששומר שם משתמש root, שם מסד נתונים ושם אוסף.
+*What this does:* Creates a ConfigMap that stores root username, database name, and collection name.
 
-**צעד 1.2: יצירת Secret לסיסמה**
+**Step 1.2: Create Secret for Password**
 
-הקובץ `01-mongo-secret.yaml` מכיל מידע רגיש מוצפן:
+The `01-mongo-secret.yaml` file contains encrypted sensitive information:
 ```bash
 oc apply -f infrastructure/k8s/01-mongo-secret.yaml
 ```
-*מה זה עושה:* יוצר Secret עם סיסמת root מוצפנת של MongoDB.
+*What this does:* Creates a Secret with MongoDB's encrypted root password.
 
-**צעד 1.3: יצירת PVC לאחסון קבוע**
+**Step 1.3: Create PVC for Persistent Storage**
 
-הקובץ `02-mongo-pvc.yaml` מבקש אחסון קבוע:
+The `02-mongo-pvc.yaml` file requests persistent storage:
 ```bash
 oc apply -f infrastructure/k8s/02-mongo-pvc.yaml
 ```
-*מה זה עושה:* יוצר בקשה לקבלת 2GB אחסון קבוע כדי שהמידע של MongoDB לא יאבד בעת הפעלה מחדש.
+*What this does:* Creates a request for 2GB persistent storage so MongoDB data won't be lost during restarts.
 
-**צעד 1.4: יצירת Deployment של MongoDB**
+**Step 1.4: Create MongoDB Deployment**
 
-הקובץ `03-mongo-deployment.yaml` מגדיר איך להריץ את MongoDB:
+The `03-mongo-deployment.yaml` file defines how to run MongoDB:
 ```bash
 oc apply -f infrastructure/k8s/03-mongo-deployment.yaml
 ```
-*מה זה עושה:* יוצר Deployment שמריץ pod של MongoDB עם כל ההגדרות, probes לבדיקת בריאות, וחיבור לאחסון הקבוע.
+*What this does:* Creates a Deployment that runs a MongoDB pod with all configurations, health check probes, and connection to persistent storage.
 
-**צעד 1.5: יצירת Service למסד הנתונים**
+**Step 1.5: Create Database Service**
 
-הקובץ `04-mongo-service.yaml` חושף את MongoDB לתוך הקלאסטר:
+The `04-mongo-service.yaml` file exposes MongoDB within the cluster:
 ```bash
 oc apply -f infrastructure/k8s/04-mongo-service.yaml
 ```
-*מה זה עושה:* יוצר Service בשם `mongo-db-service` שמאפשר לאפליקציות אחרות להתחבר למסד הנתונים.
+*What this does:* Creates a Service named `mongo-db-service` that allows other applications to connect to the database.
 
-**צעד 1.6: המתנה לאתחול MongoDB**
+**Step 1.6: Wait for MongoDB Initialization**
 ```bash
 echo "Waiting for MongoDB pod to become ready..."
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-db --timeout=300s
@@ -136,14 +138,14 @@ sleep 15
 echo "MongoDB is fully initialized!"
 ```
 
-#### 2. פריסת אפליקציית FastAPI
+#### 2. FastAPI Application Deployment
 
-**צעד 2.1: יצירת Deployment של FastAPI**
+**Step 2.1: Create FastAPI Deployment**
 
-הקובץ `05-fastapi-deployment.yaml` מגדיר איך להריץ את האפליקציה שלנו:
+The `05-fastapi-deployment.yaml` file defines how to run our application:
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS (עם sed)</strong></summary>
+<summary>💻 <strong>For Linux / macOS (with sed)</strong></summary>
 
 ```bash
 sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|${FULL_IMAGE_NAME}|g" \
@@ -152,110 +154,110 @@ sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|${FULL_IMA
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (עם PowerShell)</strong></summary>
+<summary>🪟 <strong>For Windows (with PowerShell)</strong></summary>
 
 ```batch
 powershell -NoProfile -Command "(Get-Content -Raw infrastructure\k8s\05-fastapi-deployment.yaml) -replace 'docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', '%FULL_IMAGE_NAME%' | oc apply -f -"
 ```
 </details>
 
-*מה זה עושה:* יוצר Deployment עם האימג' שבנינו, מגדיר משתני סביבה לחיבור למסד הנתונים, ומוסיף probes לבדיקת בריאות.
+*What this does:* Creates a Deployment with the image we built, sets environment variables for database connection, and adds health check probes.
 
-**צעד 2.2: יצירת Service לאפליקציה**
+**Step 2.2: Create Application Service**
 
-הקובץ `06-fastapi-service.yaml` חושף את האפליקציה בתוך הקלאסטר:
+The `06-fastapi-service.yaml` file exposes the application within the cluster:
 ```bash
 oc apply -f infrastructure/k8s/06-fastapi-service.yaml
 ```
-*מה זה עושה:* יוצר Service בשם `mongo-api-service` שמאפשר גישה לאפליקציה דרך פורט 8080.
+*What this does:* Creates a Service named `mongo-api-service` that enables access to the application through port 8080.
 
-**צעד 2.3: המתנה לאתחול האפליקציה**
+**Step 2.3: Wait for Application Initialization**
 ```bash
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-api --timeout=300s
 echo "FastAPI is ready!"
 ```
 
-#### 3. חשיפת האפליקציה לאינטרנט
+#### 3. Expose Application to Internet
 
-**צעד 3.1: יצירת Route**
+**Step 3.1: Create Route**
 
-הקובץ `07-fastapi-route.yaml` חושף את האפליקציה לאינטרנט:
+The `07-fastapi-route.yaml` file exposes the application to the internet:
 ```bash
 oc apply -f infrastructure/k8s/07-fastapi-route.yaml
 echo "Route created."
 ```
-*מה זה עושה:* יוצר Route ב-OpenShift שנותן לנו URL ציבורי להגיע לאפליקציה עם HTTPS.
+*What this does:* Creates a Route in OpenShift that gives us a public URL to access the application with HTTPS.
 
-**כעת, דלג לשלב "שימוש ובדיקת ה-API".**
+**Now, skip to the "API Usage and Testing" section.**
 
 ---
 
-### חלק ב' - פריסה אימפרטיבית (פקודות ישירות)
-שיטה זו משתמשת בפקודות CLI ישירות במקום קבצי YAML.
-(ודא שאין משאבים קיימים מהחלק הקודם).
+### Part B - Imperative Deployment (Direct Commands)
+This method uses direct CLI commands instead of YAML files.
+(Ensure there are no existing resources from the previous part).
 
-#### 1. פריסת תשתית MongoDB
+#### 1. MongoDB Infrastructure Deployment
 
-**צעד 1.1: יצירת ConfigMap**
+**Step 1.1: Create ConfigMap**
 ```bash
 oc create configmap mongo-db-config \
   --from-literal=MONGO_INITDB_ROOT_USERNAME=mongoadmin \
   --from-literal=MONGO_DB_NAME=enemy_soldiers \
   --from-literal=MONGO_COLLECTION_NAME=soldier_details
 ```
-*מה זה עושה:* יוצר ConfigMap עם הגדרות תצורה של MongoDB.
+*What this does:* Creates a ConfigMap with MongoDB configuration settings.
 
-**צעד 1.2: יצירת Secret**
+**Step 1.2: Create Secret**
 ```bash
 oc create secret generic mongo-db-credentials \
   --from-literal=MONGO_INITDB_ROOT_PASSWORD='yourSuperSecretPassword123'
 ```
-*מה זה עושה:* יוצר Secret עם סיסמת root של MongoDB.
+*What this does:* Creates a Secret with MongoDB's root password.
 
-**צעד 1.3: יצירת PVC (משתמשים בקובץ YAML)**
+**Step 1.3: Create PVC (using YAML file)**
 ```bash
 oc apply -f infrastructure/k8s/02-mongo-pvc.yaml
 ```
-*מה זה עושה:* אין דרך פשוטה ליצור PVC באופן אימפרטיבי, לכן משתמשים בקובץ.
+*What this does:* There's no simple way to create PVC imperatively, so we use the file.
 
-**צעד 1.4: יצירת Deployment של MongoDB**
+**Step 1.4: Create MongoDB Deployment**
 ```bash
-# יוצר את ה-Deployment הבסיסי
+# Create the basic Deployment
 oc create deployment mongo-db-deployment --image=mongo:8.0
 
-# מוסיף פורט לקונטיינר (נחוץ כדי לחשוף אותו אחר כך)
+# Add port to container (needed to expose it later)
 oc patch deployment mongo-db-deployment -p '{"spec":{"template":{"spec":{"containers":[{"name":"mongo","ports":[{"containerPort":27017}]}]}}}}'
 
-# מחבר את האחסון הקבוע
+# Connect persistent storage
 oc set volume deployment/mongo-db-deployment \
   --add --name=mongo-persistent-storage \
   --type=pvc --claim-name=mongo-db-pvc \
   --mount-path=/data/db
 
-# מוסיף משתני סביבה מה-ConfigMap וה-Secret
+# Add environment variables from ConfigMap and Secret
 oc set env deployment/mongo-db-deployment --from=configmap/mongo-db-config
 oc set env deployment/mongo-db-deployment --from=secret/mongo-db-credentials
 
-# מוסיף labels לניהול
+# Add labels for management
 oc label deployment mongo-db-deployment \
   app.kubernetes.io/instance=mongo-db \
   app.kubernetes.io/name=mongo \
   app.kubernetes.io/part-of=mongo-loader-app
 ```
 
-**צעד 1.5: יצירת Service**
+**Step 1.5: Create Service**
 ```bash
-# חושף את ה-Deployment כ-Service
+# Expose the Deployment as a Service
 oc expose deployment mongo-db-deployment --port=27017 --name=mongo-db-service
 
-# מוסיף labels ל-Service
+# Add labels to Service
 oc label service mongo-db-service \
   app.kubernetes.io/instance=mongo-db \
   app.kubernetes.io/name=mongo \
   app.kubernetes.io/part-of=mongo-loader-app
 ```
 
-**צעד 1.6: המתנה לאתחול**
+**Step 1.6: Wait for Initialization**
 ```bash
 echo "Waiting for MongoDB pod to become ready..."
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-db --timeout=300s
@@ -264,25 +266,25 @@ sleep 15
 echo "MongoDB is fully initialized!"
 ```
 
-#### 2. פריסת אפליקציית FastAPI
+#### 2. FastAPI Application Deployment
 
-**צעד 2.1: יצירת Deployment של FastAPI**
+**Step 2.1: Create FastAPI Deployment**
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS</strong></summary>
+<summary>💻 <strong>For Linux / macOS</strong></summary>
 
 ```bash
-# יוצר את ה-Deployment עם האימג' שלנו
+# Create the Deployment with our image
 oc create deployment mongo-api-deployment --image="${FULL_IMAGE_NAME}"
 
-# מוסיף משתני סביבה
+# Add environment variables
 oc set env deployment/mongo-api-deployment \
   MONGO_HOST=mongo-db-service \
   MONGO_PORT=27017
 oc set env deployment/mongo-api-deployment --from=configmap/mongo-db-config
 oc set env deployment/mongo-api-deployment --from=secret/mongo-db-credentials
 
-# מוסיף labels
+# Add labels
 oc label deployment mongo-api-deployment \
   app.kubernetes.io/instance=mongo-api \
   app.kubernetes.io/name=fastapi-mongo \
@@ -292,47 +294,47 @@ oc label deployment mongo-api-deployment \
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (CMD)</strong></summary>
+<summary>🪟 <strong>For Windows (CMD)</strong></summary>
 
 ```batch
-@REM יוצר את ה-Deployment עם האימג' שלנו
+@REM Create the Deployment with our image
 oc create deployment mongo-api-deployment --image="%FULL_IMAGE_NAME%"
 
-@REM מוסיף משתני סביבה
+@REM Add environment variables
 oc set env deployment/mongo-api-deployment MONGO_HOST=mongo-db-service MONGO_PORT=27017
 oc set env deployment/mongo-api-deployment --from=configmap/mongo-db-config
 oc set env deployment/mongo-api-deployment --from=secret/mongo-db-credentials
 
-@REM מוסיף labels
+@REM Add labels
 oc label deployment mongo-api-deployment app.kubernetes.io/instance=mongo-api app.kubernetes.io/name=fastapi-mongo app.kubernetes.io/part-of=mongo-loader-app
 ```
 </details>
 
-**צעד 2.2: יצירת Service לאפליקציה**
+**Step 2.2: Create Application Service**
 ```bash
-# חושף את האפליקציה כ-Service
+# Expose the application as a Service
 oc expose deployment mongo-api-deployment --port=8080 --name=mongo-api-service
 
-# מוסיף labels ל-Service
+# Add labels to Service
 oc label service mongo-api-service \
   app.kubernetes.io/instance=mongo-api \
   app.kubernetes.io/name=fastapi-mongo \
   app.kubernetes.io/part-of=mongo-loader-app
 ```
 
-**צעד 2.3: המתנה לאתחול**
+**Step 2.3: Wait for Initialization**
 ```bash
 echo "Waiting for FastAPI pod to become ready..."
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-api --timeout=300s
 echo "FastAPI is ready!"
 ```
 
-#### 3. חשיפת האפליקציה לאינטרנט
+#### 3. Expose Application to Internet
 ```bash
-# יוצר Route לגישה חיצונית
+# Create Route for external access
 oc expose service mongo-api-service --name=mongo-api-route
 
-# מוסיף labels ל-Route
+# Add labels to Route
 oc label route mongo-api-route \
   app.kubernetes.io/instance=mongo-api \
   app.kubernetes.io/name=fastapi-mongo \
@@ -340,38 +342,38 @@ oc label route mongo-api-route \
 
 echo "Route created."
 ```
-**כעת, דלג לשלב "שימוש ובדיקת ה-API".**
+**Now, skip to the "API Usage and Testing" section.**
 
 ---
 
-## מסלול ב': פריסה עם `StatefulSet` (הגישה המתקדמת)
+## Path B: Deployment with `StatefulSet` (The Advanced Approach)
 
-### 1. פריסת תשתית MongoDB
+### 1. MongoDB Infrastructure Deployment
 
-**צעד 1.1: יצירת ConfigMap ו-Secret**
+**Step 1.1: Create ConfigMap and Secret**
 ```bash
 oc apply -f infrastructure/k8s/00-mongo-configmap.yaml
 oc apply -f infrastructure/k8s/01-mongo-secret.yaml
 ```
-*מה זה עושה:* זהה למסלול הקודם - יוצר תצורה וסיסמה.
+*What this does:* Same as the previous path - creates configuration and password.
 
-**צעד 1.2: יצירת StatefulSet**
+**Step 1.2: Create StatefulSet**
 
-הקובץ `03a-mongo-statefulset.yaml` יוצר StatefulSet במקום Deployment:
+The `03a-mongo-statefulset.yaml` file creates a StatefulSet instead of Deployment:
 ```bash
 oc apply -f infrastructure/k8s/03a-mongo-statefulset.yaml
 ```
-*מה זה עושה:* יוצר StatefulSet שמנהל את האחסון הקבוע באופן אוטומטי ונותן זהות יציבה לכל Pod.
+*What this does:* Creates a StatefulSet that manages persistent storage automatically and gives each Pod a stable identity.
 
-**צעד 1.3: יצירת Headless Service**
+**Step 1.3: Create Headless Service**
 
-הקובץ `04a-mongo-headless-service.yaml` יוצר Service מיוחד ל-StatefulSet:
+The `04a-mongo-headless-service.yaml` file creates a special Service for StatefulSet:
 ```bash
 oc apply -f infrastructure/k8s/04a-mongo-headless-service.yaml
 ```
-*מה זה עושה:* יוצר Headless Service (בלי ClusterIP) שנותן לכל Pod ב-StatefulSet כתובת רשת ייחודית ויציבה.
+*What this does:* Creates a Headless Service (without ClusterIP) that gives each Pod in the StatefulSet a unique and stable network address.
 
-**צעד 1.4: המתנה לאתחול**
+**Step 1.4: Wait for Initialization**
 ```bash
 echo "Waiting for MongoDB StatefulSet pod to become ready..."
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-db --timeout=300s
@@ -380,14 +382,14 @@ sleep 15
 echo "MongoDB is fully initialized!"
 ```
 
-### 2. פריסת אפליקציית FastAPI
+### 2. FastAPI Application Deployment
 
-**צעד 2.1: יצירת Deployment של FastAPI (מותאם ל-StatefulSet)**
+**Step 2.1: Create FastAPI Deployment (Adapted for StatefulSet)**
 
-הקובץ `05a-fastapi-deployment-for-statefulset.yaml` מותאם להתחבר ל-Headless Service:
+The `05a-fastapi-deployment-for-statefulset.yaml` file is adapted to connect to Headless Service:
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS (עם sed)</strong></summary>
+<summary>💻 <strong>For Linux / macOS (with sed)</strong></summary>
 
 ```bash
 sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|${FULL_IMAGE_NAME}|g" \
@@ -396,33 +398,33 @@ sed -e "s|docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest|${FULL_IMA
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (עם PowerShell)</strong></summary>
+<summary>🪟 <strong>For Windows (with PowerShell)</strong></summary>
 
 ```batch
 powershell -NoProfile -Command "(Get-Content -Raw infrastructure\k8s\05a-fastapi-deployment-for-statefulset.yaml) -replace 'docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest', '%FULL_IMAGE_NAME%' | oc apply -f -"
 ```
 </details>
 
-*מה זה עושה:* יוצר Deployment של האפליקציה שמתחבר ל-`mongo-db-headless-service` במקום ל-Service רגיל.
+*What this does:* Creates an application Deployment that connects to `mongo-db-headless-service` instead of regular Service.
 
-**צעד 2.2: יצירת Service לאפליקציה**
+**Step 2.2: Create Application Service**
 
-הקובץ `06a-fastapi-service-for-statefulset.yaml` יוצר Service עם שמות מותאמים:
+The `06a-fastapi-service-for-statefulset.yaml` file creates a Service with adapted names:
 ```bash
 oc apply -f infrastructure/k8s/06a-fastapi-service-for-statefulset.yaml
 ```
 
-**צעד 2.3: המתנה לאתחול**
+**Step 2.3: Wait for Initialization**
 ```bash
 oc wait --for=condition=ready pod -l app.kubernetes.io/instance=mongo-api-stateful --timeout=300s
 echo "FastAPI is ready!"
 ```
 
-### 3. חשיפת האפליקציה
+### 3. Expose Application
 
-**צעד 3.1: יצירת Route מותאם ל-StatefulSet**
+**Step 3.1: Create Route Adapted for StatefulSet**
 
-הקובץ `07a-fastapi-route-for-statefulset.yaml` יוצר Route עם שם מותאם:
+The `07a-fastapi-route-for-statefulset.yaml` file creates a Route with adapted name:
 ```bash
 oc apply -f infrastructure/k8s/07a-fastapi-route-for-statefulset.yaml
 echo "Route created."
@@ -430,20 +432,20 @@ echo "Route created."
 
 ---
 
-## שלב 3: שימוש ובדיקת ה-API
+## Step 3: API Usage and Testing
 
-לאחר שהפריסה הושלמה, מצא את כתובת ה-URL של האפליקציה.
+After deployment is complete, find the application's URL.
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS</strong></summary>
+<summary>💻 <strong>For Linux / macOS</strong></summary>
 
 ```bash
-# בחר את השורה המתאימה למסלול הפריסה שלך:
+# Choose the line appropriate for your deployment path:
 
-# עבור מסלול Deployment (רגיל או אימפרטיבי):
+# For Deployment path (regular or imperative):
 export ROUTE_URL=$(oc get route mongo-api-route -o jsonpath='{.spec.host}')
 
-# עבור מסלול StatefulSet:
+# For StatefulSet path:
 # export ROUTE_URL=$(oc get route mongo-api-route-stateful -o jsonpath='{.spec.host}')
 
 echo "Application URL: https://${ROUTE_URL}"
@@ -452,15 +454,15 @@ echo "API Documentation: https://${ROUTE_URL}/docs"
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (CMD)</strong></summary>
+<summary>🪟 <strong>For Windows (CMD)</strong></summary>
 
 ```batch
-@REM בחר את השורה המתאימה למסלול הפריסה שלך:
+@REM Choose the line appropriate for your deployment path:
 
-@REM עבור מסלול Deployment (רגיל או אימפרטיבי):
+@REM For Deployment path (regular or imperative):
 FOR /F "usebackq delims=" %%g IN (`oc get route mongo-api-route -o jsonpath={.spec.host}`) DO SET "ROUTE_URL=%%g"
 
-@REM עבור מסלול StatefulSet:
+@REM For StatefulSet path:
 @REM FOR /F "usebackq delims=" %%g IN (`oc get route mongo-api-route-stateful -o jsonpath={.spec.host}`) DO SET "ROUTE_URL=%%g"
 
 echo Application URL: https://%ROUTE_URL%
@@ -468,36 +470,36 @@ echo API Documentation: https://%ROUTE_URL%/docs
 ```
 </details>
 
-### דוגמאות שימוש עם `curl`
+### Usage Examples with `curl`
 
 <details>
-<summary>💻 <strong>עבור Linux / macOS</strong></summary>
+<summary>💻 <strong>For Linux / macOS</strong></summary>
 
-**1. קבלת כל החיילים**
+**1. Get all soldiers**
 ```bash
 curl "https://${ROUTE_URL}/soldiersdb/" | jq
 ```
 
-**2. יצירת חייל חדש**
+**2. Create a new soldier**
 ```bash
 curl -X POST "https://${ROUTE_URL}/soldiersdb/" \
   -H "Content-Type: application/json" \
   -d '{"ID": 101, "first_name": "John", "last_name": "Doe", "phone_number": 5551234, "rank": "Sergeant"}'
 ```
 
-**3. קבלת חייל ספציפי (ID=101)**
+**3. Get specific soldier (ID=101)**
 ```bash
 curl "https://${ROUTE_URL}/soldiersdb/101" | jq
 ```
 
-**4. עדכון חייל (ID=101)**
+**4. Update soldier (ID=101)**
 ```bash
 curl -X PUT "https://${ROUTE_URL}/soldiersdb/101" \
   -H "Content-Type: application/json" \
   -d '{"rank": "Captain", "phone_number": 5555678}'
 ```
 
-**5. מחיקת חייל (ID=101)**
+**5. Delete soldier (ID=101)**
 ```bash
 curl -X DELETE "https://${ROUTE_URL}/soldiersdb/101"
 ```
@@ -505,33 +507,33 @@ curl -X DELETE "https://${ROUTE_URL}/soldiersdb/101"
 </details>
 
 <details>
-<summary>🪟 <strong>עבור Windows (CMD)</strong></summary>
+<summary>🪟 <strong>For Windows (CMD)</strong></summary>
 
-**1. קבלת כל החיילים**
+**1. Get all soldiers**
 ```batch
 curl "https://%ROUTE_URL%/soldiersdb/" | jq
 ```
 
-**2. יצירת חייל חדש**
+**2. Create a new soldier**
 ```batch
 curl -X POST "https://%ROUTE_URL%/soldiersdb/" ^
   -H "Content-Type: application/json" ^
   -d "{\"ID\": 101, \"first_name\": \"John\", \"last_name\": \"Doe\", \"phone_number\": 5551234, \"rank\": \"Sergeant\"}"
 ```
 
-**3. קבלת חייל ספציפי (ID=101)**
+**3. Get specific soldier (ID=101)**
 ```batch
 curl "https://%ROUTE_URL%/soldiersdb/101" | jq
 ```
 
-**4. עדכון חייל (ID=101)**
+**4. Update soldier (ID=101)**
 ```batch
 curl -X PUT "https://%ROUTE_URL%/soldiersdb/101" ^
   -H "Content-Type: application/json" ^
   -d "{\"rank\": \"Captain\", \"phone_number\": 5555678}"
 ```
 
-**5. מחיקת חייל (ID=101)**
+**5. Delete soldier (ID=101)**
 ```batch
 curl -X DELETE "https://%ROUTE_URL%/soldiersdb/101"
 ```
@@ -540,40 +542,40 @@ curl -X DELETE "https://%ROUTE_URL%/soldiersdb/101"
 
 ---
 
-## שלב 4: ניקוי הסביבה
+## Step 4: Environment Cleanup
 
-### אפשרות א': מחיקה סלקטיבית באמצעות תוויות
+### Option A: Selective deletion using labels
 ```bash
-# מחיקת כל הרכיבים ששייכים לאפליקציה
+# Delete all components belonging to the application
 oc delete all,pvc,secret,configmap -l app.kubernetes.io/part-of=mongo-loader-app
 ```
 
-### אפשרות ב': מחיקת הפרויקט כולו
+### Option B: Delete entire project
 ```bash
 oc delete project fastapi-mongo-demo
 ```
 
 ---
 
-## טיפים ופתרון בעיות
+## Tips and Troubleshooting
 
-### בדיקת סטטוס הרכיבים
+### Check component status
 ```bash
-# בדיקת כל ה-pods
+# Check all pods
 oc get pods
 
-# בדיקת logs של MongoDB
+# Check MongoDB logs
 oc logs -l app.kubernetes.io/instance=mongo-db
 
-# בדיקת logs של FastAPI
+# Check FastAPI logs
 oc logs -l app.kubernetes.io/instance=mongo-api
 
-# בדיקת Routes
+# Check Routes
 oc get routes
 ```
 
-### בעיות נפוצות
-1. **Pod לא עולה:** בדוק logs עם `oc logs <pod-name>`
-2. **לא ניתן להגיע לאפליקציה:** ודא שה-Route נוצר בהצלחה
-3. **בעיות חיבור למסד נתונים:** ודא שה-Service של MongoDB פועל
-4. **בעיות אחסון:** בדוק שה-PVC נוצר ומקושר
+### Common issues
+1. **Pod won't start:** Check logs with `oc logs <pod-name>`
+2. **Can't reach application:** Ensure Route was created successfully
+3. **Database connection issues:** Ensure MongoDB Service is running
+4. **Storage issues:** Check that PVC was created and connected

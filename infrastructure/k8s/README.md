@@ -1,200 +1,202 @@
-# תיעוד מניפסטים של Kubernetes/OpenShift
+# Kubernetes/OpenShift Manifests Documentation
 
-מדריך זה מסביר את התפקיד של כל אחד מקבצי ה-YAML בתיקייה זו, איך הם עובדים יחד, ומה עושה כל חלק חשוב.
+🌍 **Language:** **[English](README.md)** | [עברית](README.he.md)
 
-## סקירה כללית
+This guide explains the role of each YAML file in this directory, how they work together, and what each important part does.
 
-האפליקציה מורכבת משני רכיבים עיקריים:
-1. **MongoDB** - מסד הנתונים
-2. **FastAPI** - ה-API שמתחבר למסד הנתונים
+## Overview
 
-יש לנו **שני מסלולי פריסה**:
-- **Deployment** - הדרך הסטנדרטית (קבצים רגילים)
-- **StatefulSet** - הדרך המומלצת למסדי נתונים (קבצים עם 'a')
+The application consists of two main components:
+1. **MongoDB** - The database
+2. **FastAPI** - The API that connects to the database
 
----
-
-## רכיבים משותפים (לשני המסלולים)
-
-### `00-mongo-configmap.yaml` - הגדרות לא רגישות
-```yaml
-data:
-  MONGO_INITDB_ROOT_USERNAME: "mongoadmin"    # שם משתמש ראשי
-  MONGO_DB_NAME: "enemy_soldiers"             # שם מסד הנתונים (לפי הדרישות!)
-  MONGO_COLLECTION_NAME: "soldier_details"   # שם הקולקשן (לפי הדרישות!)
-```
-**למה ConfigMap?** מידע לא רגיש שאפשר לראות, קל לשנות בלי לבנות מחדש את האימג'.
-
-### `01-mongo-secret.yaml` - סיסמאות מוצפנות
-```yaml
-data:
-  MONGO_INITDB_ROOT_PASSWORD: amhzZHl0dGZlNjVmZHM1NHNjZjY1  # מוצפן base64
-```
-**למה Secret?** סיסמאות חייבות להיות מוצפנות. OpenShift מצפין אותן אוטומטית.
+We have **two deployment paths**:
+- **Deployment** - The standard way (regular files)
+- **StatefulSet** - The recommended way for databases (files with 'a')
 
 ---
 
-## מסלול 1: פריסה עם Deployment (קבצים רגילים)
+## Shared Components (for both paths)
 
-### `02-mongo-pvc.yaml` - דרישת אחסון
+### `00-mongo-configmap.yaml` - Non-sensitive configuration
+```yaml
+data:
+  MONGO_INITDB_ROOT_USERNAME: "mongoadmin"    # Root username
+  MONGO_DB_NAME: "enemy_soldiers"             # Database name (per requirements!)
+  MONGO_COLLECTION_NAME: "soldier_details"   # Collection name (per requirements!)
+```
+**Why ConfigMap?** Non-sensitive information that can be viewed, easy to change without rebuilding the image.
+
+### `01-mongo-secret.yaml` - Encrypted passwords
+```yaml
+data:
+  MONGO_INITDB_ROOT_PASSWORD: amhzZHl0dGZlNjVmZHM1NHNjZjY1  # base64 encrypted
+```
+**Why Secret?** Passwords must be encrypted. OpenShift encrypts them automatically.
+
+---
+
+## Path 1: Deployment with Deployment (regular files)
+
+### `02-mongo-pvc.yaml` - Storage request
 ```yaml
 spec:
   accessModes:
-    - ReadWriteOnce    # רק pod אחד יכול לכתוב
+    - ReadWriteOnce    # Only one pod can write
   resources:
     requests:
-      storage: 2Gi     # דורש 2GB אחסון קבוע
+      storage: 2Gi     # Requests 2GB persistent storage
 ```
-**למה PVC?** בלי זה, כל הנתונים של MongoDB יאבדו כשה-pod נהרג.
+**Why PVC?** Without this, all MongoDB data would be lost when the pod is killed.
 
-### `03-mongo-deployment.yaml` - הרצת MongoDB
-**חלקים חשובים:**
+### `03-mongo-deployment.yaml` - Running MongoDB
+**Important parts:**
 ```yaml
-# איזה אימג' להשתמש
+# Which image to use
 image: docker.io/library/mongo:8.0
 
-# איך לקבל את ההגדרות
+# How to get the configuration
 envFrom:
   - configMapRef:
-      name: mongo-db-config     # כל המשתנים מה-ConfigMap
+      name: mongo-db-config     # All variables from ConfigMap
   - secretRef:
-      name: mongo-db-credentials # כל המשתנים מה-Secret
+      name: mongo-db-credentials # All variables from Secret
 
-# בדיקות בריאות - מה ההבדל בין השתיים?
-readinessProbe:                # "האם מוכן לקבל תעבורה?"
+# Health checks - what's the difference between the two?
+readinessProbe:                # "Is it ready to receive traffic?"
   exec:
     command: ["mongosh", "--eval", "db.adminCommand('ping')"]
-  initialDelaySeconds: 10      # ממתין 10 שניות אחרי שהpod עולה
-  periodSeconds: 10           # בודק כל 10 שניות
-  timeoutSeconds: 5           # אם לא עונה תוך 5 שניות - נכשל
-  failureThreshold: 3         # אחרי 3 כשלונות - מפסיק לשלוח תעבורה (לא הורג!)
+  initialDelaySeconds: 10      # Wait 10 seconds after pod starts
+  periodSeconds: 10           # Check every 10 seconds
+  timeoutSeconds: 5           # If no response within 5 seconds - fail
+  failureThreshold: 3         # After 3 failures - stop sending traffic (don't kill!)
 
-livenessProbe:                 # "האם עדיין חי?"
+livenessProbe:                 # "Is it still alive?"
   exec:
     command: ["mongosh", "--eval", "db.adminCommand('ping')"]
-  initialDelaySeconds: 30      # ממתין 30 שניות (יותר!) - נותן זמן להתחיל
-  periodSeconds: 15           # בודק כל 15 שניות (פחות תדיר)
-  timeoutSeconds: 5           # זמן המתנה לתשובה
-  failureThreshold: 3         # אחרי 3 כשלונות - הורג את הpod ויוצר חדש!
+  initialDelaySeconds: 30      # Wait 30 seconds (more!) - give time to start
+  periodSeconds: 15           # Check every 15 seconds (less frequent)
+  timeoutSeconds: 5           # Response timeout
+  failureThreshold: 3         # After 3 failures - kill pod and create new one!
 
-# ניהול משאבים - כמה CPU וזיכרון צריך
+# Resource management - how much CPU and memory needed
 resources:
-  requests:                   # "מינימום מובטח" - OpenShift מבטיח שיהיה זמין
-    cpu: "200m"              # 200 מילי-cores = 0.2 ליבת CPU
-    memory: "256Mi"          # 256 מגהבייט RAM
-  limits:                     # "מקסימום מותר" - לא יכול לחרוג
-    cpu: "500m"              # 0.5 ליבת CPU מקסימום - אם חורג, OpenShift מאט
-    memory: "512Mi"          # 512 מגהבייט RAM מקסימום - אם חורג, OpenShift הורג!
+  requests:                   # "Guaranteed minimum" - OpenShift guarantees availability
+    cpu: "200m"              # 200 milli-cores = 0.2 CPU core
+    memory: "256Mi"          # 256 megabytes RAM
+  limits:                     # "Maximum allowed" - cannot exceed
+    cpu: "500m"              # 0.5 CPU core maximum - if exceeded, OpenShift throttles
+    memory: "512Mi"          # 512 megabytes RAM maximum - if exceeded, OpenShift kills!
 
-# חיבור לאחסון הקבוע
+# Connection to persistent storage
 volumeMounts:
   - name: mongo-persistent-storage
-    mountPath: /data/db        # איפה MongoDB שומר את הנתונים
+    mountPath: /data/db        # Where MongoDB stores data
 volumes:
   - name: mongo-persistent-storage
     persistentVolumeClaim:
-      claimName: mongo-db-pvc  # מתחבר ל-PVC שיצרנו
+      claimName: mongo-db-pvc  # Connect to PVC we created
 ```
 
-### `04-mongo-service.yaml` - כתובת פנימית למונגו
+### `04-mongo-service.yaml` - Internal address for MongoDB
 ```yaml
 spec:
   selector:
-    app.kubernetes.io/instance: mongo-db  # מחבר לכל הpods עם התווית הזו
+    app.kubernetes.io/instance: mongo-db  # Connect to all pods with this label
   ports:
-    - port: 27017              # פורט סטנדרטי של MongoDB
+    - port: 27017              # Standard MongoDB port
       targetPort: 27017
 ```
-**מה זה עושה?** יוצר כתובת `mongo-db-service:27017` שה-API יכול להשתמש בה.
+**What does this do?** Creates address `mongo-db-service:27017` that the API can use.
 
-### `05-fastapi-deployment.yaml` - הרצת ה-API
-**חלקים חשובים:**
+### `05-fastapi-deployment.yaml` - Running the API
+**Important parts:**
 ```yaml
-# איזה אימג' להשתמש (זה מוחלף בסקריפט הפריסה)
+# Which image to use (this is replaced in deployment script)
 image: "docker.io/YOUR_DOCKERHUB_USERNAME/fastapi-mongo-crud:latest"
 
-# משתני סביבה שה-API צריך
+# Environment variables the API needs
 env:
   - name: MONGO_HOST
-    value: "mongo-db-service"    # שם ה-Service של MongoDB
+    value: "mongo-db-service"    # MongoDB Service name
   - name: MONGO_PORT
     value: "27017"
   - name: MONGO_USER
     valueFrom:
-      configMapKeyRef:           # לוקח מה-ConfigMap
+      configMapKeyRef:           # Take from ConfigMap
         name: mongo-db-config
         key: MONGO_INITDB_ROOT_USERNAME
   - name: MONGO_PASSWORD
     valueFrom:
-      secretKeyRef:              # לוקח מה-Secret (מוצפן!)
+      secretKeyRef:              # Take from Secret (encrypted!)
         name: mongo-db-credentials
         key: MONGO_INITDB_ROOT_PASSWORD
 
-# בדיקות בריאות של ה-API - שני endpoints שונים!
-readinessProbe:               # "האם מוכן לעבוד?"
+# API health checks - two different endpoints!
+readinessProbe:               # "Is it ready to work?"
   httpGet:
-    path: /health             # בודק גם חיבור למסד נתונים - אם MongoDB מנותק, נכשל!
+    path: /health             # Also checks database connection - if MongoDB disconnected, fails!
     port: 8080
-  initialDelaySeconds: 15     # ממתין 15 שניות אחרי שהpod עולה
-  periodSeconds: 10          # בודק כל 10 שניות
+  initialDelaySeconds: 15     # Wait 15 seconds after pod starts
+  periodSeconds: 10          # Check every 10 seconds
 
-livenessProbe:               # "האם עדיין חי?"
+livenessProbe:               # "Is it still alive?"
   httpGet:
-    path: /                  # בודק רק שהשרת עונה - לא בודק מסד נתונים
+    path: /                  # Only checks if server responds - doesn't check database
     port: 8080
-  initialDelaySeconds: 20     # ממתין 20 שניות (יותר מreadiness!)
-  periodSeconds: 20          # בודק כל 20 שניות (פחות תדיר)
+  initialDelaySeconds: 20     # Wait 20 seconds (more than readiness!)
+  periodSeconds: 20          # Check every 20 seconds (less frequent)
 
-# ניהול משאבים - ה-API צריך פחות מMongoDB
+# Resource management - API needs less than MongoDB
 resources:
-  requests:                  # מינימום מובטח
-    cpu: "50m"              # 0.05 ליבת CPU - יישום Python קל
-    memory: "128Mi"         # 128 מגהבייט RAM
-  limits:                    # מקסימום מותר
-    cpu: "200m"             # 0.2 ליבת CPU מקסימום
-    memory: "256Mi"         # 256 מגהבייט RAM מקסימום
+  requests:                  # Guaranteed minimum
+    cpu: "50m"              # 0.05 CPU core - light Python application
+    memory: "128Mi"         # 128 megabytes RAM
+  limits:                    # Maximum allowed
+    cpu: "200m"             # 0.2 CPU core maximum
+    memory: "256Mi"         # 256 megabytes RAM maximum
 ```
 
-### `06-fastapi-service.yaml` - כתובת פנימית ל-API
+### `06-fastapi-service.yaml` - Internal address for API
 ```yaml
 spec:
   selector:
-    app.kubernetes.io/instance: mongo-api  # מחבר לpods של ה-API
+    app.kubernetes.io/instance: mongo-api  # Connect to API pods
   ports:
     - port: 8080
       targetPort: 8080
 ```
 
-### `07-fastapi-route.yaml` - כתובת ציבורית
+### `07-fastapi-route.yaml` - Public address
 ```yaml
 spec:
   to:
     kind: Service
-    name: mongo-api-service    # מפנה לService של ה-API
+    name: mongo-api-service    # Point to API Service
   tls:
-    termination: edge          # HTTPS אוטומטי
-    insecureEdgeTerminationPolicy: Redirect  # מפנה HTTP ל-HTTPS
+    termination: edge          # Automatic HTTPS
+    insecureEdgeTerminationPolicy: Redirect  # Redirect HTTP to HTTPS
 ```
-**מה זה עושה?** יוצר URL ציבורי כמו `https://mongo-api-route-xxx.apps.cluster.com`
+**What does this do?** Creates public URL like `https://mongo-api-route-xxx.apps.cluster.com`
 
 ---
 
-## מסלול 2: פריסה עם StatefulSet (קבצים עם 'a')
+## Path 2: Deployment with StatefulSet (files with 'a')
 
-### למה StatefulSet טוב יותר למסדי נתונים?
-1. **זהות יציבה** - כל pod מקבל שם קבוע (mongo-db-statefulset-0)
-2. **סדר פריסה** - pods עולים ויורדים בסדר מוגדר
-3. **אחסון אוטומטי** - יוצר PVC אוטומטית לכל pod
+### Why is StatefulSet better for databases?
+1. **Stable identity** - Each pod gets a fixed name (mongo-db-statefulset-0)
+2. **Ordered deployment** - Pods start and stop in defined order
+3. **Automatic storage** - Creates PVC automatically for each pod
 
-### `03a-mongo-statefulset.yaml` - StatefulSet במקום Deployment
-**הבדלים עיקריים:**
+### `03a-mongo-statefulset.yaml` - StatefulSet instead of Deployment
+**Main differences:**
 ```yaml
-kind: StatefulSet              # במקום Deployment
+kind: StatefulSet              # Instead of Deployment
 spec:
-  serviceName: "mongo-db-headless-service"  # צריך Headless Service
+  serviceName: "mongo-db-headless-service"  # Needs Headless Service
 
-# במקום volumes רגיל:
-volumeClaimTemplates:          # יוצר PVC אוטומטית!
+# Instead of regular volumes:
+volumeClaimTemplates:          # Creates PVC automatically!
 - metadata:
     name: mongo-persistent-storage
   spec:
@@ -204,42 +206,42 @@ volumeClaimTemplates:          # יוצר PVC אוטומטית!
         storage: 2Gi
 ```
 
-### `04a-mongo-headless-service.yaml` - Service מיוחד ל-StatefulSet
+### `04a-mongo-headless-service.yaml` - Special Service for StatefulSet
 ```yaml
 spec:
-  clusterIP: None              # זה מה שעושה אותו "headless"
+  clusterIP: None              # This is what makes it "headless"
 ```
-**למה headless?** StatefulSet צריך את זה כדי לתת לכל pod כתובת ייחודית.
+**Why headless?** StatefulSet needs this to give each pod a unique address.
 
-### קבצי API מותאמים (05a, 06a, 07a)
-ההבדל היחיד:
+### Adapted API files (05a, 06a, 07a)
+The only difference:
 ```yaml
-# בקבצים רגילים:
+# In regular files:
 name: mongo-api
 value: "mongo-db-service"
 
-# בקבצים של StatefulSet:
+# In StatefulSet files:
 name: mongo-api-stateful
 value: "mongo-db-headless-service"
 ```
 
 ---
 
-## איך לבחור בין המסלולים?
+## How to choose between paths?
 
-### השתמש ב-Deployment אם:
-- אתה מתחיל ורוצה משהו פשוט
-- לא אכפת לך מאבדן נתונים (לפיתוח)
-- יש לך רק MongoDB אחד
+### Use Deployment if:
+- You're starting out and want something simple
+- You don't mind losing data (for development)
+- You only have one MongoDB
 
-### השתמש ב-StatefulSet אם:
-- אתה רוצה מסד נתונים יציב (production)
-- חשוב לך שהנתונים ישרדו
-- תכנן להגדיל ל-replica set של MongoDB בעתיד
+### Use StatefulSet if:
+- You want a stable database (production)
+- Data persistence is important to you
+- You plan to scale to MongoDB replica set in the future
 
 ---
 
-## סדר הפעלה נכון
+## Correct deployment order
 
 ### Deployment:
 ```bash
@@ -248,7 +250,7 @@ oc apply -f 01-mongo-secret.yaml
 oc apply -f 02-mongo-pvc.yaml
 oc apply -f 03-mongo-deployment.yaml
 oc apply -f 04-mongo-service.yaml
-# המתן שMongoDB יהיה מוכן
+# Wait for MongoDB to be ready
 oc apply -f 05-fastapi-deployment.yaml
 oc apply -f 06-fastapi-service.yaml
 oc apply -f 07-fastapi-route.yaml
@@ -260,7 +262,7 @@ oc apply -f 00-mongo-configmap.yaml
 oc apply -f 01-mongo-secret.yaml
 oc apply -f 03a-mongo-statefulset.yaml
 oc apply -f 04a-mongo-headless-service.yaml
-# המתן שMongoDB יהיה מוכן
+# Wait for MongoDB to be ready
 oc apply -f 05a-fastapi-deployment-for-statefulset.yaml
 oc apply -f 06a-fastapi-service-for-statefulset.yaml
 oc apply -f 07a-fastapi-route-for-statefulset.yaml
@@ -268,29 +270,29 @@ oc apply -f 07a-fastapi-route-for-statefulset.yaml
 
 ---
 
-## בדיקת תקינות
+## Health verification
 
-### בדיקה שהכל עובד:
+### Check everything is working:
 ```bash
-# בדוק שכל הpods רצים
+# Check all pods are running
 oc get pods
 
-# בדוק שהservices זמינים
+# Check services are available
 oc get svc
 
-# קבל את ה-URL הציבורי
+# Get public URL
 oc get route
 
-# בדוק שה-API עובד
+# Check API is working
 curl https://your-route-url/health
 ```
 
-### פתרון בעיות נפוצות:
+### Common troubleshooting:
 ```bash
-# אם pod לא עולה
+# If pod won't start
 oc describe pod <pod-name>
 oc logs <pod-name>
 
-# אם אין חיבור למסד נתונים
+# If no database connection
 oc exec -it <mongo-pod> -- mongosh
 ```
