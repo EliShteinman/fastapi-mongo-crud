@@ -49,19 +49,19 @@ async def create_soldier(soldier: models.SoldierCreate):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except RuntimeError as e:
         # Catch a database connection error from the DAL and convert it to a 503 Service Unavailable response
-        logger.error(f"Database error creating soldier: {str(e)}")
+        logger.error(f"Database error creating soldier with ID {soldier.ID}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         )
     except ValidationError as e:
         # Catch Pydantic validation errors
-        logger.warning(f"Validation error creating soldier: {str(e)}")
+        logger.warning(f"Validation error creating soldier with ID {soldier.ID}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
     except Exception as e:
         # Catch any unexpected errors
-        logger.error(f"Unexpected error creating soldier: {str(e)}")
+        logger.error(f"Unexpected error creating soldier with ID {soldier.ID}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred",
@@ -115,12 +115,12 @@ async def read_soldier_by_id(soldier_id: int):
         # Re-raise HTTP exceptions as-is
         raise
     except RuntimeError as e:
-        logger.error(f"Database error retrieving soldier {soldier_id}: {str(e)}")
+        logger.error(f"Database error retrieving soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error retrieving soldier {soldier_id}: {str(e)}")
+        logger.error(f"Unexpected error retrieving soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred",
@@ -150,17 +150,17 @@ async def update_soldier(soldier_id: int, soldier_update: models.SoldierUpdate):
         # Re-raise HTTP exceptions as-is
         raise
     except ValidationError as e:
-        logger.warning(f"Validation error updating soldier {soldier_id}: {str(e)}")
+        logger.warning(f"Validation error updating soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
     except RuntimeError as e:
-        logger.error(f"Database error updating soldier {soldier_id}: {str(e)}")
+        logger.error(f"Database error updating soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error updating soldier {soldier_id}: {str(e)}")
+        logger.error(f"Unexpected error updating soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred",
@@ -191,12 +191,12 @@ async def delete_soldier(soldier_id: int):
         # Re-raise HTTP exceptions as-is
         raise
     except RuntimeError as e:
-        logger.error(f"Database error deleting soldier {soldier_id}: {str(e)}")
+        logger.error(f"Database error deleting soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error deleting soldier {soldier_id}: {str(e)}")
+        logger.error(f"Unexpected error deleting soldier with ID {soldier_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred",

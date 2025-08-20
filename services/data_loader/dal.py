@@ -9,7 +9,6 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .models import SoldierCreate, SoldierUpdate
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +65,7 @@ class DataLoader:
             raise RuntimeError("Database connection is not available.")
 
         try:
+            logger.info("Attempting to retrieve all soldiers")
             items: List[Dict[str, Any]] = []
             async for item in self.collection.find({}):
                 item["_id"] = str(item["_id"])
@@ -82,6 +82,7 @@ class DataLoader:
             raise RuntimeError("Database connection is not available.")
 
         try:
+            logger.info(f"Attempting to retrieve soldier with ID {item_id}")
             item = await self.collection.find_one({"ID": item_id})
             if item:
                 item["_id"] = str(item["_id"])
@@ -99,6 +100,7 @@ class DataLoader:
             raise RuntimeError("Database connection is not available.")
 
         try:
+            logger.info(f"Attempting to create soldier with ID {item.ID}")
             item_dict = item.model_dump()
             insert_result = await self.collection.insert_one(item_dict)
             created_item = await self.collection.find_one(
@@ -112,7 +114,7 @@ class DataLoader:
             logger.warning(f"Attempt to create duplicate soldier with ID {item.ID}.")
             raise ValueError(f"Item with ID {item.ID} already exists.")
         except PyMongoError as e:
-            logger.error(f"Error creating item: {e}")
+            logger.error(f"Error creating item with ID {item.ID}: {e}")
             raise RuntimeError(f"Database operation failed: {e}")
 
     async def update_item(
@@ -123,6 +125,7 @@ class DataLoader:
             raise RuntimeError("Database connection is not available.")
 
         try:
+            logger.info(f"Attempting to update soldier with ID {item_id}")
             update_data = item_update.model_dump(exclude_unset=True)
 
             if not update_data:
@@ -150,6 +153,7 @@ class DataLoader:
             raise RuntimeError("Database connection is not available.")
 
         try:
+            logger.info(f"Attempting to delete soldier with ID {item_id}")
             delete_result = await self.collection.delete_one({"ID": item_id})
             success = delete_result.deleted_count > 0
             if success:
