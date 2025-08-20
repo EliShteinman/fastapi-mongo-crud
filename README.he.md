@@ -54,7 +54,7 @@
 │   ├── README.he.md        # ➡️ סקירת סקריפטים והתחלה מהירה
 │   ├── demo_guide.md       # ➡️ מדריך פריסה ושימוש ידני שלב אחר שלב
 │   └── run_api_tests.sh    # סקריפט בדיקה E2E עבור ה-API
-├── .env.example            # תבנית משתני סביבה לפיתוח מקומי
+├── example.env             # תבנית משתני סביבה לפיתוח מקומי
 ├── .gitignore
 ├── Dockerfile
 ├── requirements.txt
@@ -75,7 +75,7 @@
 ### הגדרת סביבה
 1. **העתק תבנית סביבה:**
    ```bash
-   cp .env.example .env
+   cp example.env .env
    ```
 
 2. **לפיתוח מקומי, ערכי ברירת המחדל עובדים כמו שהם** (MongoDB ללא אימות)

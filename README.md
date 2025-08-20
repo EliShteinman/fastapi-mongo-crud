@@ -54,7 +54,7 @@ The project is organized into distinct directories, each with its own detailed d
 │   ├── README.md           # ➡️ Scripts overview and quick start
 │   ├── demo_guide.md       # ➡️ Step-by-step manual deployment & usage guide
 │   └── run_api_tests.sh    # E2E test script for the API
-├── .env.example            # Environment variables template for local development
+├── example.env             # Environment variables template for local development
 ├── .gitignore
 ├── Dockerfile
 ├── requirements.txt
@@ -75,7 +75,7 @@ The project is organized into distinct directories, each with its own detailed d
 ### Environment Setup
 1. **Copy environment template:**
    ```bash
-   cp .env.example .env
+   cp example.env .env
    ```
 
 2. **For local development, the default values work as-is** (MongoDB without authentication)
